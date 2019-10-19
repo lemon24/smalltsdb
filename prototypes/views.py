@@ -63,7 +63,6 @@ def open_db(path, views):
 
     """
     db = sqlite3.connect(path)
-    db.create_aggregate('quantile', 2, QuantileAggregate)
 
     db.execute("""
         create table if not exists incoming (
@@ -73,13 +72,15 @@ def open_db(path, views):
         );
     """)
 
+    db.create_aggregate('quantile', 2, QuantileAggregate)
+
     for view, seconds in views:
         db.execute(f"""
             create view if not exists
             {view} (path, timestamp, n, min, max, avg, sum, p50, p90, p99) as
             select
                 path,
-                cast(timestamp as integer) / {seconds} * {seconds} as minute,
+                cast(timestamp as integer) / {seconds} * {seconds} as agg_ts,
                 count(value),
                 min(value),
                 max(value),
@@ -89,7 +90,7 @@ def open_db(path, views):
                 quantile(value, .9),
                 quantile(value, .99)
             from incoming
-            group by path, minute;
+            group by path, agg_ts;
         """)
 
     return db
@@ -101,8 +102,10 @@ def generate_random_data(db, count):
             "insert into incoming values (?, ?, ?);",
             (
                 random.choice(('one', 'two')),
-                (datetime.datetime.utcnow().replace(microsecond=0)
-                + datetime.timedelta(microseconds=random.randrange(2 * 60 * 60 * 10**6))).timestamp(),
+                (
+                    datetime.datetime.utcnow() + datetime.timedelta(
+                        microseconds=random.randrange(60 * 60 * 10**6))
+                ).timestamp(),
                 random.randrange(100),
             )
         )
@@ -133,9 +136,12 @@ TABLES = ['incoming'] + [v for v, _ in VIEWS]
 
 if __name__ == '__main__':
     import sys
-    path = sys.argv[1]
+    if len(sys.argv) < 2:
+        path = ':memory:'
+    else:
+        path = sys.argv[1]
     if len(sys.argv) < 3:
-        count = 20
+        count = 10
     else:
         count = int(sys.argv[2])
 
