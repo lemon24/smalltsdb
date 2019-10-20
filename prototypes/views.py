@@ -50,7 +50,7 @@ class QuantileAggregate:
         return numpy.quantile(self.values, self.q)
 
 
-def open_db(path, views):
+def open_db(path, aggregations):
     """Return a configured database connection with all the required tables.
 
     Arguments:
@@ -63,6 +63,7 @@ def open_db(path, views):
 
     """
     db = sqlite3.connect(path)
+    db.create_aggregate('quantile', 2, QuantileAggregate)
 
     db.execute("""
         create table if not exists incoming (
@@ -72,12 +73,11 @@ def open_db(path, views):
         );
     """)
 
-    db.create_aggregate('quantile', 2, QuantileAggregate)
 
-    for view, seconds in views:
+    for name, seconds in aggregations:
         db.execute(f"""
             create view if not exists
-            {view} (path, timestamp, n, min, max, avg, sum, p50, p90, p99) as
+            {name} (path, timestamp, n, min, max, avg, sum, p50, p90, p99) as
             select
                 path,
                 cast(timestamp as integer) / {seconds} * {seconds} as agg_ts,
@@ -122,7 +122,7 @@ def pretty_print_table(db, table):
     print()
 
 
-VIEWS = [
+AGGREGATIONS = [
     ('onesecond', 1),
     ('tensecond', 10),
     ('oneminute', 60),
@@ -131,7 +131,7 @@ VIEWS = [
     ('oneday', 86400),
 ]
 
-TABLES = ['incoming'] + [v for v, _ in VIEWS]
+TABLES = ['incoming'] + [v for v, _ in AGGREGATIONS]
 
 
 if __name__ == '__main__':
@@ -145,7 +145,7 @@ if __name__ == '__main__':
     else:
         count = int(sys.argv[2])
 
-    db = open_db(path, VIEWS)
+    db = open_db(path, AGGREGATIONS)
     generate_random_data(db, count=count)
     for table in TABLES:
         pretty_print_table(db, table)
