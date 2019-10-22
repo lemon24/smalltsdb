@@ -1,0 +1,12 @@
+[run]
+branch = True
+source =
+    smalltsdb
+    tests
+parallel = True
+
+[paths]
+source =
+   src/smalltsdb
+   .tox/*/lib/python*/site-packages/smalltsdb
+   .tox/pypy*/site-packages/smalltsdb
