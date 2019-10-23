@@ -1,9 +1,10 @@
+import queue
 import socket
 import threading
 import time
 
-from smalltsdb import run_daemon
-from smalltsdb import SmallTSDB
+from smalltsdb import TSDB
+from smalltsdb.daemon import run_daemon
 
 
 def test_integration(tmp_path):
@@ -15,11 +16,11 @@ def test_integration(tmp_path):
     logging.basicConfig()
     logging.getLogger('smalltsdb').setLevel(logging.DEBUG)
 
-    done = threading.Event()
+    q = queue.Queue()
 
     def run():
-        tsdb = SmallTSDB(db_path)
-        run_daemon(tsdb, server_address, done)
+        tsdb = TSDB(db_path)
+        run_daemon(tsdb, server_address, q)
 
     t = threading.Thread(target=run)
     t.start()
@@ -35,10 +36,10 @@ def test_integration(tmp_path):
     # also give it time to consume stuff
     time.sleep(0.1)
 
-    done.set()
+    q.put(None)
     t.join()
 
-    tsdb = SmallTSDB(db_path)
+    tsdb = TSDB(db_path)
     rows = list(tsdb.db.execute('select * from tensecond order by path, timestamp;'))
     assert rows == [
         ('one', 0, 2, 1.0, 5.0, 3.0, 6.0, 3.0, 4.6, 4.96),
