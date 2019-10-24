@@ -19,8 +19,8 @@ def test_integration(tmp_path):
     q = queue.Queue()
 
     def run():
-        tsdb = TSDB(db_path)
-        run_daemon(tsdb, server_address, q)
+        with TSDB(db_path) as tsdb:
+            run_daemon(tsdb, server_address, q)
 
     t = threading.Thread(target=run)
     t.start()
@@ -39,8 +39,12 @@ def test_integration(tmp_path):
     q.put(None)
     t.join()
 
-    with TSDB(db_path).open_aggregate_db() as db:
-        rows = list(db.execute('select * from tensecond order by path, timestamp;'))
+    with TSDB(db_path) as tsdb:
+        tsdb.sync()
+
+        rows = list(
+            tsdb.db.execute('select * from tensecond order by path, timestamp;')
+        )
         assert rows == [
             ('one', 0, 2, 1.0, 5.0, 3.0, 6.0, 3.0, 4.6, 4.96),
             ('one', 10, 1, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0),

@@ -67,42 +67,6 @@ def open_db(path, periods):
         sqlite3.Connection
 
     """
-    db = sqlite3.connect(path)
-    db.create_aggregate('quantile', 2, QuantileAggregate)
-
-    db.execute(
-        """
-        create table if not exists incoming (
-            path text not null,
-            timestamp real not null,
-            value real not null
-        );
-    """
-    )
-
-    for name, seconds in periods.items():
-        db.execute(
-            f"""
-            -- temporary because it's not gonna work on a connection that doesn't have quantile
-            create temp view if not exists
-            {name} (path, timestamp, n, min, max, avg, sum, p50, p90, p99) as
-            select
-                path,
-                cast(timestamp as integer) / {seconds} * {seconds} as agg_ts,
-                count(value),
-                min(value),
-                max(value),
-                avg(value),
-                sum(value),
-                quantile(value, .5),
-                quantile(value, .9),
-                quantile(value, .99)
-            from incoming
-            group by path, agg_ts;
-        """
-        )
-
-    return db
 
 
 def epoch_from_datetime(dt):
@@ -110,19 +74,43 @@ def epoch_from_datetime(dt):
 
 
 class BaseTSDB:
-    @contextmanager
-    def open_incoming_db(self):
+    def __init__(self):
+        self._db = None
+
+    # private
+
+    def _open_db(self):
         raise NotImplementedError
 
-    @contextmanager
-    def open_aggregate_db(self):
-        raise NotImplementedError
+    # public - lifecycle
+
+    @property
+    def db(self):
+        if not self._db:
+            self._db = self._open_db()
+        return self._db
+
+    def close(self):
+        self.db.close()
+        self._db = None
+
+    def __enter__(self):
+        # force the db into existence
+        self.db
+        return self
+
+    def __exit__(self, *args):
+        self.close()
+
+    def sync(self):
+        pass
+
+    # public - convenience methods
 
     def insert(self, tuples):
-        with self.open_incoming_db() as db:
-            with db:
-                for t in tuples:
-                    db.execute("insert into incoming values (?, ?, ?);", t)
+        with self.db:
+            for t in tuples:
+                self.db.execute("insert into incoming values (?, ?, ?);", t)
 
     def get_metric(self, path, period, stat, interval):
         assert period in PERIODS
@@ -134,44 +122,60 @@ class BaseTSDB:
         if isinstance(end, datetime.datetime):
             end = epoch_from_datetime()
 
-        with self.open_aggregate_db() as db:
-            rows = db.execute(
-                f"""
-                select timestamp, {stat}
-                from {period}
-                where path = :path
-                order by timestamp;
-            """,
-                {'path': path},
-            )
-            return list(rows)
+        rows = self.db.execute(
+            f"""
+            select timestamp, {stat}
+            from {period}
+            where path = :path
+            order by timestamp;
+        """,
+            {'path': path},
+        )
+        return list(rows)
 
 
-class TSDB(BaseTSDB):
+class ViewTSDB(BaseTSDB):
     def __init__(self, path):
+        super().__init__()
         self.path = path
-        self._db = None
 
-    @contextmanager
     def _open_db(self):
-        db = self._db
-        if db:
-            yield db
-            return
+        db = sqlite3.connect(self.path)
+        db.create_aggregate('quantile', 2, QuantileAggregate)
 
-        try:
-            self._db = open_db(self.path, PERIODS)
-            yield self._db
-        finally:
-            self._db.close()
-            self._db = None
+        db.execute(
+            """
+            create table if not exists incoming (
+                path text not null,
+                timestamp real not null,
+                value real not null
+            );
+            """
+        )
 
-    @contextmanager
-    def open_incoming_db(self):
-        with self._open_db() as db:
-            yield db
+        for name, seconds in PERIODS.items():
+            db.execute(
+                f"""
+                -- temporary because it's not gonna work on a connection that doesn't have quantile
+                create temp view if not exists
+                {name} (path, timestamp, n, min, max, avg, sum, p50, p90, p99) as
+                select
+                    path,
+                    cast(timestamp as integer) / {seconds} * {seconds} as agg_ts,
+                    count(value),
+                    min(value),
+                    max(value),
+                    avg(value),
+                    sum(value),
+                    quantile(value, .5),
+                    quantile(value, .9),
+                    quantile(value, .99)
+                from incoming
+                group by path, agg_ts;
+                """
+            )
 
-    @contextmanager
-    def open_aggregate_db(self):
-        with self._open_db() as db:
-            yield db
+        return db
+
+
+TSDB = ViewTSDB
