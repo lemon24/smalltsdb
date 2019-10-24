@@ -55,20 +55,6 @@ PERIODS = collections.OrderedDict(
 STATS = 'n min max avg sum p50 p90 p99'.split()
 
 
-def open_db(path, periods):
-    """Return a configured database connection with all the required tables.
-
-    Arguments:
-        path (str): Path to the database.
-        periods (dict(str, int)): Aggregation views to create,
-            as (view_name, aggregation_seconds) tuples.
-
-    Returns:
-        sqlite3.Connection
-
-    """
-
-
 def epoch_from_datetime(dt):
     return (dt - datetime.datetime(1970, 1, 1)) / datetime.timedelta(seconds=1)
 
@@ -176,6 +162,68 @@ class ViewTSDB(BaseTSDB):
             )
 
         return db
+
+
+class TablesTSDB(BaseTSDB):
+    def __init__(self, path):
+        super().__init__()
+        self.path = path
+
+    def _open_db(self):
+        db = sqlite3.connect(self.path)
+        db.create_aggregate('quantile', 2, QuantileAggregate)
+
+        db.execute(
+            """
+            create table if not exists incoming (
+                path text not null,
+                timestamp real not null,
+                value real not null
+            );
+            """
+        )
+
+        for name, seconds in PERIODS.items():
+            db.execute(
+                f"""
+                create table if not exists {name} (
+                    path text not null,
+                    timestamp rea not null,
+                    n real not null,
+                    min real not null,
+                    max real not null,
+                    avg real not null,
+                    sum real not null,
+                    p50 real not null,
+                    p90 real not null,
+                    p99 real not null
+                );
+                """
+            )
+
+        return db
+
+    def sync(self):
+        with self.db as db:
+            for name, seconds in PERIODS.items():
+                db.execute(
+                    f"""
+                    insert into {name} (path, timestamp, n, min, max, avg, sum, p50, p90, p99)
+                    select
+                        path,
+                        cast(timestamp as integer) / {seconds} * {seconds} as agg_ts,
+                        count(value),
+                        min(value),
+                        max(value),
+                        avg(value),
+                        sum(value),
+                        quantile(value, .5),
+                        quantile(value, .9),
+                        quantile(value, .99)
+                    from incoming
+                    group by path, agg_ts;
+                    """
+                )
 
 
 TSDB = ViewTSDB

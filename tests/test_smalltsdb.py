@@ -6,18 +6,14 @@ import time
 import pytest
 
 from smalltsdb.daemon import run_daemon
+from smalltsdb.tsdb import TablesTSDB
 from smalltsdb.tsdb import ViewTSDB
 
 
-@pytest.mark.parametrize('TSDB', [ViewTSDB])
+@pytest.mark.parametrize('TSDB', [ViewTSDB, TablesTSDB])
 def test_integration(tmp_path, TSDB):
     server_address = ('127.0.0.1', 1111)
     db_path = str(tmp_path / 'db.sqlite')
-
-    import logging
-
-    logging.basicConfig()
-    logging.getLogger('smalltsdb').setLevel(logging.DEBUG)
 
     q = queue.Queue()
 
@@ -29,7 +25,7 @@ def test_integration(tmp_path, TSDB):
     t.start()
 
     # give the thread time to start
-    time.sleep(0.1)
+    time.sleep(1)
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.sendto(b"one 1 1", server_address)
@@ -37,7 +33,7 @@ def test_integration(tmp_path, TSDB):
     sock.sendto(b"one 1 12\n", server_address)
 
     # also give it time to consume stuff
-    time.sleep(0.1)
+    time.sleep(1)
 
     q.put(None)
     t.join()
