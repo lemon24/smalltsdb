@@ -8,6 +8,10 @@ import numpy
 
 class QuantileAggregate:
 
+    # TODO: improve performance by subclassing list/array.array
+    # and making step an alias for append
+    # (we'll need separate aggregate classes for each percentile)
+
     """quantile() sqlite3 aggregate function.
 
     Usage:
@@ -89,7 +93,7 @@ class BaseTSDB:
         self.close()
 
     def sync(self):
-        pass
+        raise NotImplementedError
 
     # public - convenience methods
 
@@ -163,6 +167,9 @@ class ViewTSDB(BaseTSDB):
 
         return db
 
+    def sync(self):
+        pass
+
 
 class TablesTSDB(BaseTSDB):
     def __init__(self, path):
@@ -188,7 +195,7 @@ class TablesTSDB(BaseTSDB):
                 f"""
                 create table if not exists {name} (
                     path text not null,
-                    timestamp rea not null,
+                    timestamp real not null,
                     n real not null,
                     min real not null,
                     max real not null,
@@ -224,6 +231,51 @@ class TablesTSDB(BaseTSDB):
                     group by path, agg_ts;
                     """
                 )
+
+
+class TwoDatabasesTSDB(TablesTSDB):
+    def __init__(self, path, incoming_path=None):
+        super().__init__(path)
+        self.incoming_path = incoming_path or path + '.incoming'
+
+    def _open_db(self):
+        db = sqlite3.connect(self.path)
+        db.create_aggregate('quantile', 2, QuantileAggregate)
+
+        db.execute("attach database ? as aux;", (self.incoming_path,))
+
+        db.execute(
+            """
+            create table if not exists aux.incoming (
+                path text not null,
+                timestamp real not null,
+                value real not null
+            );
+            """
+        )
+
+        for name, seconds in PERIODS.items():
+            db.execute(
+                f"""
+                create table if not exists {name} (
+                    path text not null,
+                    timestamp real not null,
+                    n real not null,
+                    min real not null,
+                    max real not null,
+                    avg real not null,
+                    sum real not null,
+                    p50 real not null,
+                    p90 real not null,
+                    p99 real not null
+                );
+                """
+            )
+
+        return db
+
+
+# TODO: deduplicate sql
 
 
 TSDB = ViewTSDB

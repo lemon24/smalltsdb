@@ -7,10 +7,11 @@ import pytest
 
 from smalltsdb.daemon import run_daemon
 from smalltsdb.tsdb import TablesTSDB
+from smalltsdb.tsdb import TwoDatabasesTSDB
 from smalltsdb.tsdb import ViewTSDB
 
 
-@pytest.mark.parametrize('TSDB', [ViewTSDB, TablesTSDB])
+@pytest.mark.parametrize('TSDB', [ViewTSDB, TablesTSDB, TwoDatabasesTSDB])
 def test_integration(tmp_path, TSDB):
     server_address = ('127.0.0.1', 1111)
     db_path = str(tmp_path / 'db.sqlite')
@@ -49,3 +50,6 @@ def test_integration(tmp_path, TSDB):
             ('one', 10, 1, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0),
             ('two', 0, 1, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0),
         ]
+
+
+# TODO: threadless integration test
