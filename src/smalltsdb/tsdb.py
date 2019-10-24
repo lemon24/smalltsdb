@@ -1,6 +1,7 @@
 import collections
 import datetime
 import sqlite3
+from contextlib import contextmanager
 
 import numpy
 
@@ -108,14 +109,20 @@ def epoch_from_datetime(dt):
     return (dt - datetime.datetime(1970, 1, 1)) / datetime.timedelta(seconds=1)
 
 
-class TSDB:
-    def __init__(self, path):
-        self.db = open_db(path, PERIODS)
+class BaseTSDB:
+    @contextmanager
+    def open_incoming_db(self):
+        raise NotImplementedError
+
+    @contextmanager
+    def open_aggregate_db(self):
+        raise NotImplementedError
 
     def insert(self, tuples):
-        with self.db as db:
-            for t in tuples:
-                db.execute("insert into incoming values (?, ?, ?);", t)
+        with self.open_incoming_db() as db:
+            with db:
+                for t in tuples:
+                    db.execute("insert into incoming values (?, ?, ?);", t)
 
     def get_metric(self, path, period, stat, interval):
         assert period in PERIODS
@@ -127,14 +134,44 @@ class TSDB:
         if isinstance(end, datetime.datetime):
             end = epoch_from_datetime()
 
-        rows = self.db.execute(
-            f"""
-            select timestamp, {stat}
-            from {period}
-            where path = :path
-            order by timestamp;
-        """,
-            {'path': path},
-        )
+        with self.open_aggregate_db() as db:
+            rows = db.execute(
+                f"""
+                select timestamp, {stat}
+                from {period}
+                where path = :path
+                order by timestamp;
+            """,
+                {'path': path},
+            )
+            return list(rows)
 
-        return list(rows)
+
+class TSDB(BaseTSDB):
+    def __init__(self, path):
+        self.path = path
+        self._db = None
+
+    @contextmanager
+    def _open_db(self):
+        db = self._db
+        if db:
+            yield db
+            return
+
+        try:
+            self._db = open_db(self.path, PERIODS)
+            yield self._db
+        finally:
+            self._db.close()
+            self._db = None
+
+    @contextmanager
+    def open_incoming_db(self):
+        with self._open_db() as db:
+            yield db
+
+    @contextmanager
+    def open_aggregate_db(self):
+        with self._open_db() as db:
+            yield db

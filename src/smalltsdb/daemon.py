@@ -141,11 +141,12 @@ def main():
     signal.signal(signal.SIGTERM, signal_done)
 
     tsdb = TSDB(':memory:')
-    try:
-        run_daemon(tsdb, ('localhost', 1111), q)
+    with tsdb.open_incoming_db() as db:
+        try:
+            run_daemon(tsdb, ('localhost', 1111), q)
 
-    finally:
-        pretty_print_table(tsdb.db, 'tensecond')
+        finally:
+            pretty_print_table(db, 'tensecond')
 
 
 if __name__ == '__main__':

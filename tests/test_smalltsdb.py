@@ -39,10 +39,10 @@ def test_integration(tmp_path):
     q.put(None)
     t.join()
 
-    tsdb = TSDB(db_path)
-    rows = list(tsdb.db.execute('select * from tensecond order by path, timestamp;'))
-    assert rows == [
-        ('one', 0, 2, 1.0, 5.0, 3.0, 6.0, 3.0, 4.6, 4.96),
-        ('one', 10, 1, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0),
-        ('two', 0, 1, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0),
-    ]
+    with TSDB(db_path).open_aggregate_db() as db:
+        rows = list(db.execute('select * from tensecond order by path, timestamp;'))
+        assert rows == [
+            ('one', 0, 2, 1.0, 5.0, 3.0, 6.0, 3.0, 4.6, 4.96),
+            ('one', 10, 1, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0),
+            ('two', 0, 1, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0),
+        ]
