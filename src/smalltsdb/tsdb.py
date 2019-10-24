@@ -38,7 +38,7 @@ class QuantileAggregate:
 
     def finalize(self):
         assert self.q is not None, "no q"
-        return numpy.quantile(self.values, self.q)
+        return numpy.percentile(self.values, self.q * 100)
 
 
 PERIODS = collections.OrderedDict(

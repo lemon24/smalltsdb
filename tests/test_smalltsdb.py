@@ -9,7 +9,7 @@ from smalltsdb.daemon import run_daemon
 
 def test_integration(tmp_path):
     server_address = ('127.0.0.1', 1111)
-    db_path = tmp_path / 'db.sqlite'
+    db_path = str(tmp_path / 'db.sqlite')
 
     import logging
 
