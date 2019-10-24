@@ -1,4 +1,4 @@
-* backed by SQLite, with a stable schema so it can be read from anywhere
+* backed by SQLite, with a stable schema so it can be read from anywhere; i.e. SQLite is the API 
 * should have
   * stats (n, sum, pXX, avg, min, max)
   * aggregation periods / frequency (1s/10s?, 1min, 5min, hour, day?)
@@ -10,5 +10,9 @@
   * aggregator daemon reads from incoming metrics db and writes to long term db
   * daemons can be the same process or not
   * prototype in Python, rewrite in Rust for speed if required
-  * have an easy way to get graphs in a browser (pandas/dask/bokeh)
   * no metric math initially, can be compiled to SQL if needed
+* possible easy way to get graphs in a browser
+  * web app that shows one/many graphs
+  * metric description comes from the query string
+  * simple forms to update the page / query string
+  * maybe graph arbitrary SQL, also from query string
