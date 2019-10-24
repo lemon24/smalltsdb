@@ -8,9 +8,7 @@ import numpy
 
 class QuantileAggregate:
 
-    # TODO: improve performance by subclassing list/array.array
-    # and making step an alias for append
-    # (we'll need separate aggregate classes for each percentile)
+    # TODO: mention subclassing list/array.array lack of significant improvements
 
     """quantile() sqlite3 aggregate function.
 
@@ -168,6 +166,7 @@ class ViewTSDB(BaseTSDB):
         return db
 
     def sync(self):
+        # synced by default!
         pass
 
 
@@ -211,6 +210,9 @@ class TablesTSDB(BaseTSDB):
         return db
 
     def sync(self):
+        # TODO: improve performance by not using an aggregate function at all;
+        # pull the whole dataset (sorted) into memory, instead
+
         with self.db as db:
             for name, seconds in PERIODS.items():
                 db.execute(
