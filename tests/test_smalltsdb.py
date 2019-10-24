@@ -3,11 +3,14 @@ import socket
 import threading
 import time
 
-from smalltsdb import TSDB
+import pytest
+
 from smalltsdb.daemon import run_daemon
+from smalltsdb.tsdb import ViewTSDB
 
 
-def test_integration(tmp_path):
+@pytest.mark.parametrize('TSDB', [ViewTSDB])
+def test_integration(tmp_path, TSDB):
     server_address = ('127.0.0.1', 1111)
     db_path = str(tmp_path / 'db.sqlite')
 
