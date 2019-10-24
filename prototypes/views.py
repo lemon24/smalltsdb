@@ -9,9 +9,10 @@ datapoints; there's no difference between :memory: and disk at this size, at
 least on the same connection that created the data (caching may be involved).
 
 """
-import sqlite3
 import datetime
 import random
+import sqlite3
+
 import numpy
 
 
@@ -47,7 +48,7 @@ class QuantileAggregate:
 
     def finalize(self):
         assert self.q is not None, "no q"
-        return numpy.quantile(self.values, self.q)
+        return numpy.percentile(self.values, self.q * 100)
 
 
 def open_db(path, aggregations):
@@ -65,17 +66,19 @@ def open_db(path, aggregations):
     db = sqlite3.connect(path)
     db.create_aggregate('quantile', 2, QuantileAggregate)
 
-    db.execute("""
+    db.execute(
+        """
         create table if not exists incoming (
             path text not null,
             timestamp real not null,
             value real not null
         );
-    """)
-
+    """
+    )
 
     for name, seconds in aggregations:
-        db.execute(f"""
+        db.execute(
+            f"""
             create view if not exists
             {name} (path, timestamp, n, min, max, avg, sum, p50, p90, p99) as
             select
@@ -91,7 +94,8 @@ def open_db(path, aggregations):
                 quantile(value, .99)
             from incoming
             group by path, agg_ts;
-        """)
+        """
+        )
 
     return db
 
@@ -103,11 +107,13 @@ def generate_random_data(db, count):
             (
                 random.choice(('one', 'two')),
                 (
-                    datetime.datetime.utcnow() + datetime.timedelta(
-                        microseconds=random.randrange(60 * 60 * 10**6))
+                    datetime.datetime.utcnow()
+                    + datetime.timedelta(
+                        microseconds=random.randrange(60 * 60 * 10 ** 6)
+                    )
                 ).timestamp(),
                 random.randrange(100),
-            )
+            ),
         )
 
 
@@ -118,7 +124,9 @@ def pretty_print_table(db, table):
     print(f"{rows.description[0][0]:<7} {rows.description[1][0]:<27}{values_str}")
     for path, timestamp, *values in rows:
         values_str = ''.join(f" {value:7.1f}" for value in values)
-        print(f"{path:<7} {datetime.datetime.utcfromtimestamp(timestamp)!s:<27}{values_str}")
+        print(
+            f"{path:<7} {datetime.datetime.utcfromtimestamp(timestamp)!s:<27}{values_str}"
+        )
     print()
 
 
@@ -136,6 +144,7 @@ TABLES = ['incoming'] + [v for v, _ in AGGREGATIONS]
 
 if __name__ == '__main__':
     import sys
+
     if len(sys.argv) < 2:
         path = ':memory:'
     else:
@@ -149,4 +158,3 @@ if __name__ == '__main__':
     generate_random_data(db, count=count)
     for table in TABLES:
         pretty_print_table(db, table)
-
