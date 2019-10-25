@@ -114,6 +114,51 @@ class BaseTSDB:
         return list(rows)
 
 
+def sql_create_incoming(schema='main'):
+    return f"""
+        create table if not exists {schema}.incoming (
+            path text not null,
+            timestamp real not null,
+            value real not null
+        );
+    """
+
+
+def sql_create_agg(name):
+    return f"""
+        create table if not exists {name} (
+            path text not null,
+            timestamp real not null,
+            n real not null,
+            min real not null,
+            max real not null,
+            avg real not null,
+            sum real not null,
+            p50 real not null,
+            p90 real not null,
+            p99 real not null
+        );
+    """
+
+
+def sql_select_agg(seconds):
+    return f"""
+        select
+            path,
+            cast(timestamp as integer) / {seconds} * {seconds} as agg_ts,
+            count(value),
+            min(value),
+            max(value),
+            avg(value),
+            sum(value),
+            quantile(value, .5),
+            quantile(value, .9),
+            quantile(value, .99)
+        from incoming
+        group by path, agg_ts
+    """
+
+
 class ViewTSDB(BaseTSDB):
     def __init__(self, path):
         super().__init__()
@@ -123,35 +168,16 @@ class ViewTSDB(BaseTSDB):
         db = sqlite3.connect(self.path)
         db.create_aggregate('quantile', 2, QuantileAggregate)
 
-        db.execute(
-            """
-            create table if not exists incoming (
-                path text not null,
-                timestamp real not null,
-                value real not null
-            );
-            """
-        )
+        db.execute(sql_create_incoming())
 
         for name, seconds in PERIODS.items():
             db.execute(
                 f"""
-                -- temporary because it's not gonna work on a connection that doesn't have quantile
+                -- temporary because it's not gonna work on a connection
+                -- that doesn't have quantile
                 create temp view if not exists
                 {name} (path, timestamp, n, min, max, avg, sum, p50, p90, p99) as
-                select
-                    path,
-                    cast(timestamp as integer) / {seconds} * {seconds} as agg_ts,
-                    count(value),
-                    min(value),
-                    max(value),
-                    avg(value),
-                    sum(value),
-                    quantile(value, .5),
-                    quantile(value, .9),
-                    quantile(value, .99)
-                from incoming
-                group by path, agg_ts;
+                {sql_select_agg(seconds)};
                 """
             )
 
@@ -171,33 +197,10 @@ class TablesTSDB(BaseTSDB):
         db = sqlite3.connect(self.path)
         db.create_aggregate('quantile', 2, QuantileAggregate)
 
-        db.execute(
-            """
-            create table if not exists incoming (
-                path text not null,
-                timestamp real not null,
-                value real not null
-            );
-            """
-        )
+        db.execute(sql_create_incoming())
 
         for name, seconds in PERIODS.items():
-            db.execute(
-                f"""
-                create table if not exists {name} (
-                    path text not null,
-                    timestamp real not null,
-                    n real not null,
-                    min real not null,
-                    max real not null,
-                    avg real not null,
-                    sum real not null,
-                    p50 real not null,
-                    p90 real not null,
-                    p99 real not null
-                );
-                """
-            )
+            db.execute(sql_create_agg(name))
 
         return db
 
@@ -210,19 +213,7 @@ class TablesTSDB(BaseTSDB):
                 db.execute(
                     f"""
                     insert into {name} (path, timestamp, n, min, max, avg, sum, p50, p90, p99)
-                    select
-                        path,
-                        cast(timestamp as integer) / {seconds} * {seconds} as agg_ts,
-                        count(value),
-                        min(value),
-                        max(value),
-                        avg(value),
-                        sum(value),
-                        quantile(value, .5),
-                        quantile(value, .9),
-                        quantile(value, .99)
-                    from incoming
-                    group by path, agg_ts;
+                    {sql_select_agg(seconds)};
                     """
                 )
 
@@ -238,38 +229,12 @@ class TwoDatabasesTSDB(TablesTSDB):
 
         db.execute("attach database ? as aux;", (self.incoming_path,))
 
-        db.execute(
-            """
-            create table if not exists aux.incoming (
-                path text not null,
-                timestamp real not null,
-                value real not null
-            );
-            """
-        )
+        db.execute(sql_create_incoming('aux'))
 
         for name, seconds in PERIODS.items():
-            db.execute(
-                f"""
-                create table if not exists {name} (
-                    path text not null,
-                    timestamp real not null,
-                    n real not null,
-                    min real not null,
-                    max real not null,
-                    avg real not null,
-                    sum real not null,
-                    p50 real not null,
-                    p90 real not null,
-                    p99 real not null
-                );
-                """
-            )
+            db.execute(sql_create_agg(name))
 
         return db
-
-
-# TODO: deduplicate sql
 
 
 TSDB = ViewTSDB
