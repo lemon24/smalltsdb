@@ -140,7 +140,7 @@ def main():
 
     signal.signal(signal.SIGTERM, signal_done)
 
-    with TSDB(':memory:') as tsdb:
+    with contextlib.closing(TSDB(':memory:')) as tsdb:
         try:
             run_daemon(tsdb, ('localhost', 1111), q)
 

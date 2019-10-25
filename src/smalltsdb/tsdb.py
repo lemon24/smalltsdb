@@ -82,14 +82,6 @@ class BaseTSDB:
         self.db.close()
         self._db = None
 
-    def __enter__(self):
-        # force the db into existence
-        self.db
-        return self
-
-    def __exit__(self, *args):
-        self.close()
-
     def sync(self):
         raise NotImplementedError
 
