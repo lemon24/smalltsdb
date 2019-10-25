@@ -1,18 +1,11 @@
 <!DOCTYPE html>
-<html lang="en">
-    <head>
-        <meta charset="utf-8">
-        <title>...</title>
 
-        <!-- COPY/PASTE BOKEHJS RESOURCES HERE -->
-        {{ resources.render() | safe }}
+<meta name="viewport" content="width=device-width" />
 
-        <!-- COPY/PASTE SCRIPT HERE -->
-        {{ script | safe }}
+{{ resources.render() | safe }}
 
-    </head>
-    <body>
-        <!-- INSERT DIVS HERE -->
-        {{ div | safe }}
-    </body>
-</html>
+{{ script | safe }}
+
+<title>...</title>
+
+{{ div | safe }}

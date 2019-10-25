@@ -62,7 +62,7 @@ def graph_p50(tsdb):
     plot.add_tools(wzoom)
 
     plot.toolbar.autohide = True
-    # plot.toolbar.active_drag = wzoom # bad for mobile
+    plot.toolbar.active_drag = None  # bad for mobile otherwise
     # TODO: also active scroll = zoom horizontal
 
     # plot.xaxis.axis_label = "time, I guess; is this really needed?"
