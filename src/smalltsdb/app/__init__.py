@@ -21,6 +21,7 @@ from smalltsdb.tsdb import ViewTSDB
 
 
 blueprint = Blueprint('reader', __name__)
+blueprint.add_app_template_global(CDN.render(), 'resources')
 
 
 def get_db():
@@ -92,7 +93,7 @@ def make_graph(tsdb, metrics, interval, width=600, height=200, title=None, label
 
 
 @blueprint.route('/')
-def main():
+def graph():
 
     # TODO: get start/end from query string
     start = 0
@@ -103,10 +104,12 @@ def main():
         # TODO: metric def from query string
         [('one', 'tensecond', 'avg'), ('two', 'tensecond', 'avg')],
         (start, end),
+        title='graph',
+        label='things',
     )
 
     script, div = components(plot)
-    return render_template('main.html', resources=CDN, script=script, div=div)
+    return render_template('graphs.html', script=script, divs=[div], title='graph')
 
 
 def create_app(db_path):

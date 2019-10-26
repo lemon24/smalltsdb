@@ -1,0 +1,14 @@
+{% extends "layout.html" %}
+
+{% block page_title %}{{ title }}{% endblock %}
+
+{% block head %}
+{{ resources | safe }}
+{{ script | safe }}
+{% endblock %}
+
+{% block body %}
+{% for div in divs %}
+{{ div | safe }}
+{% endfor %}
+{% endblock %}
