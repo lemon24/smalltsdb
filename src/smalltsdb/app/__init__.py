@@ -93,11 +93,13 @@ def make_graph(tsdb, metrics, interval, width=600, height=200, title=None, label
 @blueprint.route('/')
 def main():
 
-    end = datetime.now()
-    start = end - timedelta(hours=1)
+    # TODO: get start/end from query string
+    start = 0
+    end = 100
 
     plot = make_graph(
         get_db(),
+        # TODO: metric def from query string
         [('one', 'tensecond', 'avg'), ('two', 'tensecond', 'avg')],
         (start, end),
     )

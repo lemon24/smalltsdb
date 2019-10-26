@@ -102,16 +102,15 @@ class BaseTSDB:
         if isinstance(end, datetime.datetime):
             end = epoch_from_datetime(end)
 
-        # TODO: actually do something with start/end
-
         rows = self.db.execute(
             f"""
             select timestamp, {stat}
             from {period}
             where path = :path
+                and timestamp between :start and :end
             order by timestamp;
             """,
-            {'path': path},
+            {'path': path, 'start': start, 'end': end},
         )
         return list(rows)
 
