@@ -26,7 +26,8 @@ setup(
     python_requires='>=3.6',
     install_requires=['numpy'],
     extras_require={
-        'cli': ['click'],
+        'daemon': ['click'],
+        'web-app': ['flask', 'bokeh', 'click'],
         'dev': [
             # tests
             'pytest',

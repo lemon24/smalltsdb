@@ -3,7 +3,7 @@
 all: test
 
 install-dev:
-	pip install -q -e '.[cli,dev]'
+	pip install -q -e '.[daemon,web-app,dev]'
 
 test: clean-pyc install-dev
 	pytest -v --runslow
