@@ -11,9 +11,22 @@ from smalltsdb.tsdb import TwoDatabasesTSDB
 from smalltsdb.tsdb import ViewTSDB
 
 
+@pytest.fixture
+def a_free_udp_port():
+    # based on https://gist.github.com/bertjwregeer/0be94ced48383a42e70c3d9fff1f4ad0
+
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    s.bind(('127.0.0.1', 0))
+    portnum = s.getsockname()[1]
+    s.close()
+
+    return portnum
+
+
 @pytest.mark.parametrize('TSDB', [ViewTSDB, TablesTSDB, TwoDatabasesTSDB])
-def test_integration(tmp_path, TSDB):
-    server_address = ('127.0.0.1', 1111)
+def test_integration(tmp_path, TSDB, a_free_udp_port):
+    server_address = ('127.0.0.1', a_free_udp_port)
     db_path = str(tmp_path / 'db.sqlite')
 
     q = queue.Queue()
