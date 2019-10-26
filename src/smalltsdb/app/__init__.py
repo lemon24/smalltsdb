@@ -58,6 +58,7 @@ def make_graph(tsdb, metrics, interval, width=600, height=200, title=None, label
         plot_width=width,
         plot_height=height,
         title=title,
+        x_range=interval,
     )
 
     # TODO: add all tools from the beginning
@@ -68,7 +69,7 @@ def make_graph(tsdb, metrics, interval, width=600, height=200, title=None, label
     # TODO: also active scroll = zoom horizontal
 
     if label:
-        plot.yaxis.axis_label = "whatever"
+        plot.yaxis.axis_label = label
 
     colors = itertools.cycle(palette)
 
