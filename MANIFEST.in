@@ -1,3 +1,5 @@
+recursive-include src/smalltsdb/app/templates *
+recursive-include src/smalltsdb/app/static *
 include Makefile README.md CHANGES.rst LICENSE
 recursive-include tests *
 recursive-include examples *
