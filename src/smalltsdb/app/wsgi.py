@@ -11,6 +11,7 @@ import os
 
 from smalltsdb.app import create_app
 
+# TODO: take the envvar name from somewhere else
 app = create_app(os.environ['SMALLTSDB_DB'])
 app.config['TRAP_BAD_REQUEST_ERRORS'] = bool(
     os.environ.get('FLASK_TRAP_BAD_REQUEST_ERRORS', '')

@@ -1,6 +1,7 @@
 import contextlib
 import datetime
 import logging
+import os
 import queue
 import signal
 import socketserver
@@ -127,6 +128,7 @@ def pretty_print_table(db, table):
 
 
 def main():
+    # TODO: CLI
     logging.basicConfig()
     logging.getLogger('smalltsdb').setLevel(logging.DEBUG)
 
@@ -140,12 +142,14 @@ def main():
 
     signal.signal(signal.SIGTERM, signal_done)
 
-    with contextlib.closing(TSDB(':memory:')) as tsdb:
-        try:
-            run_daemon(tsdb, ('localhost', 1111), q)
+    db_path = os.environ['SMALLTSDB_DB']
+    logging.getLogger('smalltsdb').info("using db from envvar: %r", db_path)
 
-        finally:
-            pretty_print_table(tsdb.db, 'tensecond')
+    with contextlib.closing(TSDB(db_path)) as tsdb:
+        # try:
+        run_daemon(tsdb, ('localhost', 1111), q)
+    # finally:
+    # pretty_print_table(tsdb.db, 'tensecond')
 
 
 if __name__ == '__main__':

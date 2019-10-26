@@ -4,7 +4,7 @@
 <ul>
 {% for metric in metrics %}
 <li>
-<a href="{{ url_for('.graph', metric=metric, stat='avg', period='oneminute', title='{} oneminute avg'.format(metric)) }}">{{ metric }}</a>
+<a href="{{ url_for('.graph', metric=metric, stat='avg', period='oneminute', title=metric) }}">{{ metric }}</a>
 {% endfor %}
 </ul>
 {% endblock %}

@@ -19,7 +19,7 @@ from flask import g
 from flask import render_template
 from flask import request
 
-from smalltsdb.tsdb import ViewTSDB
+from smalltsdb.tsdb import TSDB
 
 
 blueprint = Blueprint('reader', __name__)
@@ -28,8 +28,9 @@ blueprint.add_app_template_global(CDN.render(), 'resources')
 
 def get_db():
     if not hasattr(g, 'db'):
-        # tsdb = ViewTSDB(current_app.config['SMALLTSDB_DB'])
-        tsdb = ViewTSDB(':memory:')
+        tsdb = TSDB(current_app.config['SMALLTSDB_DB'])
+        """
+        tsdb = TSDB(':memory:')
         tsdb.insert(
             [
                 ('one', 5, 2),
@@ -44,6 +45,8 @@ def get_db():
                 ('one', 48, 4),
             ]
         )
+        tsdb.sync()
+        """
         g.db = tsdb
     return g.db
 
@@ -53,7 +56,9 @@ def close_db(error):
         g.db.close()
 
 
-def make_graph(tsdb, metrics, interval, width=600, height=200, title=None, label=None):
+def make_graph(
+    tsdb, metrics, interval, width=600, height=200, title=None, label=None, points=False
+):
 
     plot = figure(
         x_axis_type='datetime',
@@ -83,6 +88,8 @@ def make_graph(tsdb, metrics, interval, width=600, height=200, title=None, label
             # need at least 1 value, otherwise the graph looks wonky
             # TODO: should get_metric() always emit the whole time range?
             lists = [[0], [0]]
+        # Bokeh treats timestamps as microseconds instead of seconds
+        lists[0] = [ts * 1000 for ts in lists[0]]
         source = {'timestamp': lists[0], 'values': lists[1]}
 
         plot.line(
@@ -95,10 +102,23 @@ def make_graph(tsdb, metrics, interval, width=600, height=200, title=None, label
             line_color=color,
         )
 
+        if points:
+            # TODO: deduplicate the arguments
+            plot.circle(
+                x='timestamp',
+                y='values',
+                source=source,
+                # TODO: better auto-guessing of names
+                legend=name,
+                line_width=1.2,
+                line_color=color,
+            )
+
     return plot
 
 
 def parse_datetime(value):
+    # TODO: support durations (e.g. -PT3M)
     if isinstance(value, datetime):
         return value
     try:
@@ -119,17 +139,26 @@ def graph():
     period = request.args['period']
     stat = request.args['stat']
 
-    default_end = datetime.now().replace(second=0, microsecond=0)
-    default_start = default_end - timedelta(1)
+    default_end = datetime.utcnow().replace(second=0, microsecond=0)
+    default_start = default_end - timedelta(hours=1)
 
     start = parse_datetime(request.args.get('start', default_start))
     end = parse_datetime(request.args.get('end', default_end))
 
     title = request.args.get('title')
     label = request.args.get('label')
+    # TODO: better bools
+    points = request.args.get('points')
+
+    # TODO: show gaps
 
     plot = make_graph(
-        get_db(), [(metric, period, stat)], (start, end), title=title, label=label
+        get_db(),
+        [(metric, period, stat)],
+        (start, end),
+        title=title,
+        label=label,
+        points=points,
     )
 
     script, div = components(plot)
