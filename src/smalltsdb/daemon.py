@@ -112,6 +112,7 @@ def run_daemon(tsdb, server_address, queue):
             if t is None:
                 break
             tsdb.insert(t)
+            # TODO: emit metrics here
 
 
 def pretty_print_table(db, table):
