@@ -158,6 +158,9 @@ def graph():
 
     # TODO: show gaps
 
+    # TODO: lower should default to 0
+    # TODO: add lower/upper
+
     plot = make_graph(
         get_db(),
         [(metric, period, stat)],
