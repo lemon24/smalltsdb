@@ -114,6 +114,12 @@ def make_graph(
                 line_color=color,
             )
 
+    # hacky, from
+    # https://docs.bokeh.org/en/latest/docs/user_guide/styling.html#outside-the-plot-area
+    plot.add_layout(plot.legend[0], 'right')
+
+    # TODO: show/hide legend
+
     return plot
 
 
