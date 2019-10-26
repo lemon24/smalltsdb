@@ -92,7 +92,7 @@ def make_graph(tsdb, metrics, interval, width=600, height=200, title=None, label
     return plot
 
 
-@blueprint.route('/')
+@blueprint.route('/graph')
 def graph():
 
     # TODO: get start/end from query string
@@ -110,6 +110,12 @@ def graph():
 
     script, div = components(plot)
     return render_template('graphs.html', script=script, divs=[div], title='graph')
+
+
+@blueprint.route('/')
+def metrics():
+    metrics = get_db().list_metrics()
+    return render_template('metrics.html', metrics=metrics, title='metrics')
 
 
 def create_app(db_path):

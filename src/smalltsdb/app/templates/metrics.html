@@ -1,0 +1,9 @@
+{% extends "layout.html" %}
+
+{% block body %}
+<ul>
+{% for metric in metrics %}
+<li>{{ metric }}
+{% endfor %}
+</ul>
+{% endblock %}

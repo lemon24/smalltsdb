@@ -115,7 +115,14 @@ class BaseTSDB:
         return list(rows)
 
     def list_metrics(self):
-        raise NotImplementedError
+        # TODO: find a better name
+        # TODO: what period should we be looking at? all! but make it faster please
+
+        parts = [f"select distinct path from {period}" for period in PERIODS]
+        query = "\nunion\n".join(parts) + ";"
+
+        for row in self.db.execute(query):
+            yield row[0]
 
 
 def sql_create_incoming(schema='main'):
