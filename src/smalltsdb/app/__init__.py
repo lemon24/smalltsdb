@@ -22,7 +22,7 @@ from flask import request
 from smalltsdb.tsdb import TSDB
 
 
-blueprint = Blueprint('reader', __name__)
+blueprint = Blueprint('smalltsdb', __name__)
 blueprint.add_app_template_global(CDN.render(), 'resources')
 
 
