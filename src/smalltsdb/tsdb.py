@@ -100,7 +100,9 @@ class BaseTSDB:
         if isinstance(start, datetime.datetime):
             start = epoch_from_datetime(start)
         if isinstance(end, datetime.datetime):
-            end = epoch_from_datetime()
+            end = epoch_from_datetime(end)
+
+        # TODO: actually do something with start/end
 
         rows = self.db.execute(
             f"""
@@ -108,10 +110,13 @@ class BaseTSDB:
             from {period}
             where path = :path
             order by timestamp;
-        """,
+            """,
             {'path': path},
         )
         return list(rows)
+
+    def list_metrics(self):
+        raise NotImplementedError
 
 
 def sql_create_incoming(schema='main'):

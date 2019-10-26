@@ -1,7 +1,10 @@
 import itertools
 import sqlite3
+from datetime import datetime
+from datetime import timedelta
 
 from bokeh.embed import components
+from bokeh.models import BoxZoomTool
 from bokeh.models import ColumnDataSource
 from bokeh.palettes import Category10_10 as palette
 from bokeh.plotting import figure
@@ -47,40 +50,38 @@ def close_db(error):
         g.db.close()
 
 
-def graph_p50(tsdb):
+def make_graph(tsdb, metrics, interval, width=600, height=200, title=None, label=None):
+
     plot = figure(
         x_axis_type='datetime',
-        title='p50',
-        plot_width=600,
-        plot_height=200,
         toolbar_location='above',
+        plot_width=width,
+        plot_height=height,
+        title=title,
     )
 
-    from bokeh.models import BoxZoomTool
-
+    # TODO: add all tools from the beginning
     wzoom = BoxZoomTool(dimensions="width")
     plot.add_tools(wzoom)
-
     plot.toolbar.autohide = True
     plot.toolbar.active_drag = None  # bad for mobile otherwise
     # TODO: also active scroll = zoom horizontal
 
-    # plot.xaxis.axis_label = "time, I guess; is this really needed?"
-    plot.yaxis.axis_label = "whatever"
-
-    def metric_to_dict(name):
-        pairs = tsdb.get_metric(name, 'tensecond', 'p50', (0, 100))
-        lists = list(zip(*pairs))
-        return {'timestamp': lists[0], 'values': lists[1]}
+    if label:
+        plot.yaxis.axis_label = "whatever"
 
     colors = itertools.cycle(palette)
-    names = ['one', 'two']
 
-    for name, color in zip(names, colors):
+    for (name, period, stat), color in zip(metrics, colors):
+        metric = tsdb.get_metric(name, period, stat, interval)
+        lists = list(zip(*metric))
+        source = {'timestamp': lists[0], 'values': lists[1]}
+
         plot.line(
             x='timestamp',
             y='values',
-            source=metric_to_dict(name),
+            source=source,
+            # TODO: better auto-guessing of names
             legend=name,
             line_width=1.2,
             line_color=color,
@@ -91,7 +92,16 @@ def graph_p50(tsdb):
 
 @blueprint.route('/')
 def main():
-    plot = graph_p50(get_db())
+
+    end = datetime.now()
+    start = end - timedelta(hours=1)
+
+    plot = make_graph(
+        get_db(),
+        [('one', 'tensecond', 'avg'), ('two', 'tensecond', 'avg')],
+        (start, end),
+    )
+
     script, div = components(plot)
     return render_template('main.html', resources=CDN, script=script, div=div)
 
