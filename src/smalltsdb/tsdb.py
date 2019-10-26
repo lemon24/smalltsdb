@@ -93,6 +93,7 @@ class BaseTSDB:
                 self.db.execute("insert into incoming values (?, ?, ?);", t)
 
     def get_metric(self, path, period, stat, interval):
+        # TODO: these should be ValueError
         assert period in PERIODS
         assert stat in STATS
 

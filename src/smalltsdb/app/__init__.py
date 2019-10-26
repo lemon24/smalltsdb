@@ -3,6 +3,7 @@ import sqlite3
 from datetime import datetime
 from datetime import timedelta
 
+import click
 from bokeh.embed import components
 from bokeh.models import BoxZoomTool
 from bokeh.models import ColumnDataSource
@@ -16,6 +17,7 @@ from flask import current_app
 from flask import Flask
 from flask import g
 from flask import render_template
+from flask import request
 
 from smalltsdb.tsdb import ViewTSDB
 
@@ -77,6 +79,10 @@ def make_graph(tsdb, metrics, interval, width=600, height=200, title=None, label
     for (name, period, stat), color in zip(metrics, colors):
         metric = tsdb.get_metric(name, period, stat, interval)
         lists = list(zip(*metric))
+        if not lists:
+            # need at least 1 value, otherwise the graph looks wonky
+            # TODO: should get_metric() always emit the whole time range?
+            lists = [[0], [0]]
         source = {'timestamp': lists[0], 'values': lists[1]}
 
         plot.line(
@@ -92,20 +98,38 @@ def make_graph(tsdb, metrics, interval, width=600, height=200, title=None, label
     return plot
 
 
+def parse_datetime(value):
+    if isinstance(value, datetime):
+        return value
+    try:
+        return int(value)
+    except Exception:
+        pass
+    try:
+        return click.DateTime().convert(value, None, None)
+    except click.BadParameter as e:
+        raise ValueError(str(e))
+
+
 @blueprint.route('/graph')
 def graph():
 
-    # TODO: get start/end from query string
-    start = 0
-    end = 100
+    # TODO: allow passing in more than one metric
+    metric = request.args['metric']
+    period = request.args['period']
+    stat = request.args['stat']
+
+    default_end = datetime.now().replace(second=0, microsecond=0)
+    default_start = default_end - timedelta(1)
+
+    start = parse_datetime(request.args.get('start', default_start))
+    end = parse_datetime(request.args.get('end', default_end))
+
+    title = request.args.get('title')
+    label = request.args.get('label')
 
     plot = make_graph(
-        get_db(),
-        # TODO: metric def from query string
-        [('one', 'tensecond', 'avg'), ('two', 'tensecond', 'avg')],
-        (start, end),
-        title='graph',
-        label='things',
+        get_db(), [(metric, period, stat)], (start, end), title=title, label=label
     )
 
     script, div = components(plot)
@@ -115,6 +139,8 @@ def graph():
 @blueprint.route('/')
 def metrics():
     metrics = get_db().list_metrics()
+    # other default, maybe?
+
     return render_template('metrics.html', metrics=metrics, title='metrics')
 
 
