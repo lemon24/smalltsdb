@@ -11,22 +11,31 @@ from smalltsdb.tsdb import TwoDatabasesTSDB
 from smalltsdb.tsdb import ViewTSDB
 
 
+def get_free_port(type):
+    with socket.socket(socket.AF_INET, type) as sock:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.bind(('127.0.0.1', 0))
+        return sock.getsockname()[1]
+
+
+@pytest.fixture(params=[socket.SOCK_DGRAM, socket.SOCK_STREAM])
+def socket_type_and_port(request):
+    return request.param, get_free_port(request.param)
+
+
 @pytest.fixture
-def a_free_udp_port():
-    # based on https://gist.github.com/bertjwregeer/0be94ced48383a42e70c3d9fff1f4ad0
+def socket_type(socket_type_and_port):
+    return socket_type_and_port[0]
 
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    s.bind(('127.0.0.1', 0))
-    portnum = s.getsockname()[1]
-    s.close()
 
-    return portnum
+@pytest.fixture
+def port(socket_type_and_port):
+    return socket_type_and_port[1]
 
 
 @pytest.mark.parametrize('TSDB', [ViewTSDB, TablesTSDB, TwoDatabasesTSDB])
-def test_integration(tmp_path, TSDB, a_free_udp_port):
-    server_address = ('127.0.0.1', a_free_udp_port)
+def test_integration(tmp_path, TSDB, socket_type, port):
+    server_address = ('127.0.0.1', port)
     db_path = str(tmp_path / 'db.sqlite')
 
     q = queue.Queue()
@@ -41,10 +50,12 @@ def test_integration(tmp_path, TSDB, a_free_udp_port):
     # give the thread time to start
     time.sleep(1)
 
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.sendto(b"one 1 1", server_address)
-    sock.sendto(b"one 5 2\ntwo 2 5", server_address)
-    sock.sendto(b"one 1 12\n", server_address)
+    messages = [b"one 1 1", b"one 5 2\ntwo 2 5", b"one 1 12\n"]
+
+    for message in messages:
+        with socket.socket(socket.AF_INET, socket_type) as sock:
+            sock.connect(server_address)
+            sock.send(message)
 
     # also give it time to consume stuff
     time.sleep(1)
@@ -63,4 +74,4 @@ def test_integration(tmp_path, TSDB, a_free_udp_port):
     ]
 
 
-# TODO: threadless integration test
+# TODO: sleepless integration test

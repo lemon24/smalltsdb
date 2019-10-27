@@ -35,11 +35,10 @@ class QueueMixin:
         self.queue = queue
 
 
-class DatagramHandler(socketserver.BaseRequestHandler):
+class HandlerMixin:
     def handle(self):
-        data, socket = self.request
         try:
-            tuples = list(parse_lines(data.decode('utf-8').splitlines()))
+            tuples = list(parse_lines(l.decode('utf-8') for l in self.rfile))
             log.debug("got %s tuples", len(tuples))
         except Exception as e:
             log.exception("error while parsing tuples: %s", e)
@@ -47,8 +46,24 @@ class DatagramHandler(socketserver.BaseRequestHandler):
         self.server.queue.put(tuples)
 
 
+class DatagramHandler(HandlerMixin, socketserver.DatagramRequestHandler):
+    pass
+
+
 class UDPServer(QueueMixin, socketserver.UDPServer):
     pass
+
+
+class StreamHandler(HandlerMixin, socketserver.StreamRequestHandler):
+    pass
+
+
+class TCPServer(QueueMixin, socketserver.TCPServer):
+    pass
+
+    # We could make it threaded, but we'd have to have a way of limiting
+    # the number of threads somehow; see this for how:
+    # https://stackoverflow.com/a/11783132
 
 
 @contextlib.contextmanager
@@ -104,7 +119,11 @@ def run_socketservers(things, server_kwargs=None):
 
 def run_daemon(tsdb, server_address, queue):
     socketservers = run_socketservers(
-        [(UDPServer, DatagramHandler, server_address)], {'queue': queue}
+        [
+            (UDPServer, DatagramHandler, server_address),
+            (TCPServer, StreamHandler, server_address),
+        ],
+        {'queue': queue},
     )
     with socketservers:
         while True:
