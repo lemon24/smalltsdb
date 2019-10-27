@@ -1,7 +1,6 @@
 import queue
 import socket
 import threading
-import time
 
 import pytest
 
@@ -40,15 +39,17 @@ def test_integration(tmp_path, TSDB, socket_type, port):
 
     q = queue.Queue()
 
+    started = threading.Event()
+    processed = threading.Event()
+
     def run():
         tsdb = TSDB(db_path)
-        run_daemon(tsdb, server_address, q)
+        run_daemon(tsdb, server_address, q, started.set, processed.set)
 
     t = threading.Thread(target=run)
     t.start()
 
-    # give the thread time to start
-    time.sleep(1)
+    started.wait()
 
     messages = [b"one 1 1", b"one 5 2\ntwo 2 5", b"one 1 12\n"]
 
@@ -57,8 +58,9 @@ def test_integration(tmp_path, TSDB, socket_type, port):
             sock.connect(server_address)
             sock.send(message)
 
-    # also give it time to consume stuff
-    time.sleep(1)
+    # we're waiting for 3 things to be processed before killing the server
+    for _ in range(3):
+        processed.wait()
 
     q.put(None)
     t.join()
@@ -72,6 +74,3 @@ def test_integration(tmp_path, TSDB, socket_type, port):
         ('one', 10, 1, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0),
         ('two', 0, 1, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0),
     ]
-
-
-# TODO: sleepless integration test

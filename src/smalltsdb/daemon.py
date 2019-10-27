@@ -64,6 +64,9 @@ class TCPServer(QueueMixin, socketserver.TCPServer):
     # We could make it threaded, but we'd have to have a way of limiting
     # the number of threads somehow; see this for how:
     # https://stackoverflow.com/a/11783132
+    #
+    # Could also use a semaphore, probably:
+    # https://docs.python.org/3/library/threading.html#semaphore-example
 
 
 @contextlib.contextmanager
@@ -117,7 +120,9 @@ def run_socketservers(things, server_kwargs=None):
                 raise
 
 
-def run_daemon(tsdb, server_address, queue):
+def run_daemon(
+    tsdb, server_address, queue, started_callback=None, processed_callback=None
+):
     socketservers = run_socketservers(
         [
             (UDPServer, DatagramHandler, server_address),
@@ -126,11 +131,15 @@ def run_daemon(tsdb, server_address, queue):
         {'queue': queue},
     )
     with socketservers:
+        if started_callback:
+            started_callback()
         while True:
             t = queue.get()
             if t is None:
                 break
             tsdb.insert(t)
+            if processed_callback:
+                processed_callback()
             # TODO: emit metrics here
 
 
