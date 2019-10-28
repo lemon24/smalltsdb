@@ -18,12 +18,17 @@ from flask import Flask
 from flask import g
 from flask import render_template
 from flask import request
+from jinja2 import StrictUndefined
 
+from smalltsdb.tsdb import PERIODS
+from smalltsdb.tsdb import STATS
 from smalltsdb.tsdb import TSDB
 
 
 blueprint = Blueprint('smalltsdb', __name__)
 blueprint.add_app_template_global(CDN.render(), 'resources')
+blueprint.add_app_template_global(STATS, 'STATS')
+blueprint.add_app_template_global(PERIODS, 'PERIODS')
 
 
 def get_db():
@@ -171,7 +176,18 @@ def graph():
     )
 
     script, div = components(plot)
-    return render_template('graphs.html', script=script, divs=[div], title='graph')
+    return render_template(
+        'graphs.html',
+        script=script,
+        divs=[div],
+        title='graph',
+        start=start,
+        end=end,
+        metric=metric,
+        period=period,
+        stat=stat,
+        points=points,
+    )
 
 
 @blueprint.route('/')
@@ -188,6 +204,7 @@ def create_app(db_path):
 
     app.secret_key = 'secret'
     app.teardown_appcontext(close_db)
+    app.jinja_env.undefined = StrictUndefined
 
     app.register_blueprint(blueprint)
     return app

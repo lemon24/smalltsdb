@@ -6,7 +6,43 @@
 {% endblock %}
 
 {% block body %}
+
+<form method="get" action="">
+
+<label for="start">start</label>
+<input type="date" id="start" name="start" value="{{ start.date() }}" />
+<label for="end">end</label>
+<input type="date" id="end" name="end" value="{{ end.date() }}" />
+
+
 {% for div in divs %}
 {{ div | safe }}
+
+{# FIXME: this will break if we have multiple divs #}
+<input type="text" name="metric" id="metric" placeholder="metric.path" value="{{ metric }}" required>
+
+<br>
+{% for iperiod in PERIODS %}
+<input type="radio" name="period" id="period-{{ iperiod }}" value="{{ iperiod }}" {% if iperiod == period %}checked{% endif %}>
+<label for="period-{{ iperiod }}">{{ iperiod }}</label>
 {% endfor %}
+
+<br>
+{% for istat in STATS %}
+<input type="radio" name="stat" id="stat-{{ istat }}" value="{{ istat }}" {% if istat == stat %}checked{% endif %}>
+<label for="stat-{{ istat }}">{{ istat }}</label>
+{% endfor %}
+
+<br>
+<input type="checkbox" name="points" value="true" {% if points %}checked{% endif %}=>
+<label for="points">points</label>
+
+<br>
+<input type="submit" value="submit">
+
+
+{% endfor %}
+
+</form>
+
 {% endblock %}
