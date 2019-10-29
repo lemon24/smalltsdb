@@ -2,8 +2,10 @@ import itertools
 import sqlite3
 from datetime import datetime
 from datetime import timedelta
+from datetime import timezone
 
 import click
+import iso8601
 from bokeh.embed import components
 from bokeh.models import BoxZoomTool
 from bokeh.models import ColumnDataSource
@@ -136,10 +138,7 @@ def parse_datetime(value):
         return int(value)
     except Exception:
         pass
-    try:
-        return click.DateTime().convert(value, None, None)
-    except click.BadParameter as e:
-        raise ValueError(str(e))
+    return iso8601.parse_date(value)
 
 
 @blueprint.route('/graph')
@@ -150,11 +149,13 @@ def graph():
     period = request.args['period']
     stat = request.args['stat']
 
-    default_end = datetime.utcnow().replace(second=0, microsecond=0)
+    default_end = datetime.now(timezone.utc).replace(second=0, microsecond=0)
     default_start = default_end - timedelta(hours=1)
 
-    start = parse_datetime(request.args.get('start', default_start))
-    end = parse_datetime(request.args.get('end', default_end))
+    start = parse_datetime(request.args.get('start', default_start)).replace(
+        tzinfo=None
+    )
+    end = parse_datetime(request.args.get('end', default_end)).replace(tzinfo=None)
 
     title = request.args.get('title')
     label = request.args.get('label')
