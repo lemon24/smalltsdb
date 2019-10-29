@@ -19,6 +19,18 @@ def flatten_dict(d, dict=dict, max_depth=10):
     return rv
 
 
+def merge_dict(a, b):
+    rv = dict()
+    for k in set(a) | set(b):
+        if k not in a:
+            rv[k] = b[k]
+        elif k not in b:
+            rv[k] = a[k]
+        else:
+            rv[k] = merge_dict(a[k], b[k])
+    return rv
+
+
 def unflatten_dict(d, dict=dict, max_depth=10):
     """{'a.b': 1, 'a.c': 2} -> {'a': {'b': 1, 'c': 2}}"""
     rv = dict()
@@ -29,10 +41,20 @@ def unflatten_dict(d, dict=dict, max_depth=10):
         else:
             if max_depth <= 1:
                 raise ValueError("reached max_depth 0")
-            rv.setdefault(ks[0], dict()).update(
-                unflatten_dict({'.'.join(ks[1:]): v}, dict, max_depth - 1)
+            # TODO: this could look better, I guess
+            # https://stackoverflow.com/a/6037657
+            rv[ks[0]] = merge_dict(
+                rv.get(ks[0], dict()),
+                unflatten_dict({'.'.join(ks[1:]): v}, dict, max_depth - 1),
             )
     return rv
+
+
+ud = {'1': {'b': {'0': 'c', '1': 'd'}}}
+fd = {'1.b.0': 'c', '1.b.1': 'd'}
+
+assert flatten_dict(ud) == fd
+assert unflatten_dict(fd) == ud
 
 
 ud = {'a': {'b': 1, 'c': 2}, 'd': [3, 4], 'e': 5}
@@ -142,7 +164,7 @@ except ValueError:
     pass
 
 
-# wrong way to do it; they should be woven together
+# wrapping up
 
 
 def flatten(d):
@@ -153,5 +175,11 @@ def unflatten(d):
     return int_keys_to_list(unflatten_dict(d))
 
 
-# fails: ValueError: must start from 0
 assert unflatten(flatten(ld)) == ld
+
+
+if __name__ == '__main__':
+    from pprint import pprint
+
+    pprint(ld)
+    pprint(flatten(ld))
