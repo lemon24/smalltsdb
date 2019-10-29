@@ -7,6 +7,7 @@
 
 {% block body %}
 
+
 <form method="get" action="">
 
 <label for="start">start</label>
@@ -21,20 +22,21 @@
 {# FIXME: this will break if we have multiple divs #}
 <input type="text" name="metric" id="metric" placeholder="metric.path" value="{{ metric }}" required>
 
-<br>
+<!-- <label for="period">period</label> -->
+<select name="period" id="period">
 {% for iperiod in PERIODS %}
-<input type="radio" name="period" id="period-{{ iperiod }}" value="{{ iperiod }}" {% if iperiod == period %}checked{% endif %}>
-<label for="period-{{ iperiod }}">{{ iperiod }}</label>
+<option value="{{ iperiod }}" {% if iperiod == period %}selected{% endif %}>{{ iperiod }}</option>
 {% endfor %}
+</select>
 
-<br>
+<!-- <label for="stat">stat</label> -->
+<select name="stat" id="stat">
 {% for istat in STATS %}
-<input type="radio" name="stat" id="stat-{{ istat }}" value="{{ istat }}" {% if istat == stat %}checked{% endif %}>
-<label for="stat-{{ istat }}">{{ istat }}</label>
+<option value="{{ istat }}" {% if istat == stat %}selected{% endif %}>{{ istat }}</option>
 {% endfor %}
+</select>
 
-<br>
-<input type="checkbox" name="points" value="true" {% if points %}checked{% endif %}=>
+<input type="checkbox" name="points" id="points" value="true" {% if points %}checked{% endif %}=>
 <label for="points">points</label>
 
 <br>
