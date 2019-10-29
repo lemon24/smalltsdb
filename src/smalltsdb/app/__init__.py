@@ -182,6 +182,7 @@ def graph():
         script=script,
         divs=[div],
         title='graph',
+        # TODO: start/end should be emppty if the originals were
         start=start,
         end=end,
         metric=metric,
