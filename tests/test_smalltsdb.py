@@ -5,6 +5,7 @@ import threading
 import pytest
 
 from smalltsdb.daemon import run_daemon
+from smalltsdb.tsdb import intervals
 from smalltsdb.tsdb import TablesTSDB
 from smalltsdb.tsdb import TwoDatabasesTSDB
 from smalltsdb.tsdb import ViewTSDB
@@ -74,3 +75,39 @@ def test_integration(tmp_path, TSDB, socket_type, port):
         ('one', 10, 1, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0),
         ('two', 0, 1, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0),
     ]
+
+
+INTERVALS = """\
+intervals(10, 30, 1:42, 0:30) -> (0:40, 1:10), (1:10, 1:50)
+intervals(10, 30, 1:42, 0:50) -> (1:00, 1:10), (1:10, 1:50)
+intervals(10, 30, 1:42, 1:00) -> (1:10, 1:10), (1:10, 1:50)
+intervals(10, 30, 1:49, 1:00) -> (1:10, 1:10), (1:10, 1:50)
+intervals(10, 30, 1:50, 1:00) -> (1:10, 1:20), (1:20, 2:00)
+
+intervals(60, 30, 1:42, 0:00) -> (1:00, 1:00), (1:00, 2:00)
+intervals(60, 30, 1:59, 0:00) -> (1:00, 1:00), (1:00, 2:00)
+intervals(60, 30, 2:00, 0:00) -> (1:00, 1:00), (1:00, 3:00)
+intervals(60, 30, 2:29, 0:00) -> (1:00, 1:00), (1:00, 3:00)
+intervals(60, 30, 2:30, 0:00) -> (1:00, 2:00), (2:00, 3:00)
+intervals(60, 30, 2:30, 1:00) -> (2:00, 2:00), (2:00, 3:00)
+
+intervals(5*60, 60, 24:59, 0:00) -> (5:00, 20:00), (20:00, 25:00)
+intervals(5*60, 60, 24:59, 15:00) -> (20:00, 20:00), (20:00, 25:00)
+intervals(5*60, 60, 25:00, 15:00) -> (20:00, 20:00), (20:00, 30:00)
+intervals(5*60, 60, 25:59, 15:00) -> (20:00, 20:00), (20:00, 30:00)
+intervals(5*60, 60, 26:00, 15:00) -> (20:00, 25:00), (25:00, 30:00)
+
+"""
+
+INTERVALS_DATA = [
+    eval(l.replace('intervals', '').replace('->', ',').replace(':', ' * 60 + '))
+    for l in INTERVALS.splitlines()
+    if l.strip()
+]
+
+INTERVALS_IDS = [l for l in INTERVALS.splitlines() if l.strip()]
+
+
+@pytest.mark.parametrize('args, final, partial', INTERVALS_DATA, ids=INTERVALS_IDS)
+def test_intervals(args, final, partial):
+    assert intervals(*args) == (final, partial)

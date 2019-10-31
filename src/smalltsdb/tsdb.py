@@ -204,6 +204,38 @@ class ViewTSDB(BaseTSDB):
         pass
 
 
+def intervals(period, tail, now, last_final):
+    """For a specific period and time, return what needs to be updated
+    as a (final interval, partial interval).
+
+    period is the datapoint period in seconds: 1 (onesecond), 10 (tensecond) etc.
+
+    tail is the number of seconds back from now for which we don't
+    consider consider the datapoints final.
+
+    now is now in seconds.
+
+    last_final is the last final datapoint.
+
+    The intevals are [start, end) tuples.
+
+    For example:
+
+        intervals(10, 30, 102, 30) == ((40, 70), (70, 110))
+
+    That is:
+
+        intervals(10, 30, 1:42, 0:30)
+        == [0:40, 1:10), [1:10, 1:50)
+        == [0:40, 0:50, 1:00], [1:10, 1:20, 1:30, 1:40]
+
+    """
+    return (
+        (last_final + period, (now - tail) // period * period),
+        ((now - tail) // period * period, (now // period + 1) * period),
+    )
+
+
 class TablesTSDB(BaseTSDB):
     def __init__(self, path):
         super().__init__()
