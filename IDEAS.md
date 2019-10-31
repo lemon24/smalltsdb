@@ -1,6 +1,7 @@
 * backed by SQLite, with a stable schema so it can be read from anywhere; i.e. SQLite is the API 
 * should have
   * stats (n, sum, pXX, avg, min, max)
+    * with [correct handling of percentiles](https://www.vividcortex.com/blog/why-percentiles-dont-work-the-way-you-think) (keep all the datapoints within the longest period, don't downsample)
   * aggregation periods / frequency (1s/10s?, 1min, 5min, hour, day?)
   * data retention per aggregation period
   * statsd / Graphite client compatibility (limited), so it can be used with existing clients
