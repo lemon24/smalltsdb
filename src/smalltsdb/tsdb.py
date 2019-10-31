@@ -1,9 +1,12 @@
 import collections
 import datetime
+import logging
 import sqlite3
 from contextlib import contextmanager
 
 import numpy
+
+log = logging.getLogger('smalltsdb')
 
 
 class QuantileAggregate:
@@ -225,12 +228,15 @@ class TablesTSDB(BaseTSDB):
 
         with self.db as db:
             for name, seconds in PERIODS.items():
+                start = datetime.datetime.now()
                 db.execute(
                     f"""
                     insert into {name} (path, timestamp, n, min, max, avg, sum, p50, p90, p99)
                     {sql_select_agg(seconds)};
                     """
                 )
+                end = datetime.datetime.now()
+                log.debug("synced %s in %s", name, end - start)
 
 
 class TwoDatabasesTSDB(TablesTSDB):
