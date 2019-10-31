@@ -190,8 +190,9 @@ class ViewTSDB(BaseTSDB):
                 f"""
                 -- temporary because it's not gonna work on a connection
                 -- that doesn't have quantile
-                create temp view if not exists
-                {name} (path, timestamp, n, min, max, avg, sum, p50, p90, p99) as
+                create temp view if not exists {name} (
+                    path, timestamp, n, min, max, avg, sum, p50, p90, p99
+                ) as
                 {sql_select_agg(seconds)};
                 """
             )
@@ -231,7 +232,9 @@ class TablesTSDB(BaseTSDB):
                 start = datetime.datetime.now()
                 db.execute(
                     f"""
-                    insert into {name} (path, timestamp, n, min, max, avg, sum, p50, p90, p99)
+                    insert or replace into {name} (
+                        path, timestamp, n, min, max, avg, sum, p50, p90, p99
+                    )
                     {sql_select_agg(seconds)};
                     """
                 )
