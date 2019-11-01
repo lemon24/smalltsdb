@@ -151,7 +151,8 @@ def sql_create_agg(name):
             sum real not null,
             p50 real not null,
             p90 real not null,
-            p99 real not null
+            p99 real not null,
+            primary key (path, timestamp)
         );
     """
 
@@ -277,6 +278,7 @@ class TablesTSDB(BaseTSDB):
 class TwoDatabasesTSDB(TablesTSDB):
     def __init__(self, path, incoming_path=None):
         super().__init__(path)
+        assert path not in (':memory:', ''), "anonymous databases not supported yet"
         self.incoming_path = incoming_path or path + '.incoming'
 
     def _open_db(self):

@@ -111,3 +111,30 @@ INTERVALS_IDS = [l for l in INTERVALS.splitlines() if l.strip()]
 @pytest.mark.parametrize('args, final, partial', INTERVALS_DATA, ids=INTERVALS_IDS)
 def test_intervals(args, final, partial):
     assert intervals(*args) == (final, partial)
+
+
+@pytest.mark.parametrize('TSDB', [TablesTSDB])
+def test_sync(TSDB):
+    tsdb = TSDB(':memory:')
+
+    tsdb.insert([('one', 1, 1), ('two', 5, 2)])
+
+    tsdb.sync()
+
+    rows = list(
+        tsdb.db.execute(
+            'select path, timestamp, n from tensecond order by path, timestamp;'
+        )
+    )
+    assert rows == [('one', 0, 1), ('two', 0, 1)]
+
+    tsdb.insert([('one', 2, 5), ('one', 12, 1)])
+
+    tsdb.sync()
+
+    rows = list(
+        tsdb.db.execute(
+            'select path, timestamp, n from tensecond order by path, timestamp;'
+        )
+    )
+    assert rows == [('one', 0, 2), ('one', 10, 1), ('two', 0, 1)]
