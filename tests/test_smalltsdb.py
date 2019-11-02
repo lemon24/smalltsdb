@@ -113,7 +113,7 @@ def test_intervals(args, final, partial):
     assert intervals(*args) == (final, partial)
 
 
-@pytest.mark.parametrize('TSDB', [TablesTSDB])
+@pytest.mark.parametrize('TSDB', [TablesTSDB, TwoDatabasesTSDB])
 def test_sync(TSDB):
     tsdb = TSDB(':memory:')
     tsdb._tail = 60

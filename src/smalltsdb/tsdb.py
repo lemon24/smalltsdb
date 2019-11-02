@@ -253,6 +253,8 @@ class TablesTSDB(BaseTSDB):
 
         db.execute(sql_create_incoming())
 
+        # TODO: create index incoming_index on incoming(path, timestamp)?
+
         for name, seconds in PERIODS.items():
             db.execute(sql_create_agg(name))
 
@@ -327,9 +329,11 @@ class TablesTSDB(BaseTSDB):
 class TwoDatabasesTSDB(TablesTSDB):
     def __init__(self, path, incoming_path=None):
         super().__init__(path)
-        assert path not in (':memory:', ''), "anonymous databases not supported yet"
-        # TODO: handle anonymous databases (?)
-        self.incoming_path = incoming_path or path + '.incoming'
+        if incoming_path is None:
+            incoming_path = path
+            if path not in (':memory:', ''):
+                incoming_path += '.incoming'
+        self.incoming_path = incoming_path
 
     def _open_db(self):
         db = sqlite3.connect(self.path)
