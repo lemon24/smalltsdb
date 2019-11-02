@@ -201,8 +201,7 @@ class ViewTSDB(BaseTSDB):
         return db
 
     def sync(self):
-        # synced by default!
-        pass
+        log.debug("ViewTSDB is synced by default, not doing anything!")
 
 
 def intervals(period, tail, now, last_final):

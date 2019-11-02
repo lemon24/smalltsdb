@@ -1,3 +1,5 @@
+import logging
+
 import click
 
 import smalltsdb.daemon
@@ -20,6 +22,14 @@ def cli(ctx, db):
 @click.pass_obj
 def daemon(kwargs):
     smalltsdb.daemon.main(kwargs['path'])
+
+
+@cli.command()
+@click.pass_obj
+def sync(kwargs):
+    logging.basicConfig()
+    logging.getLogger('smalltsdb').setLevel(logging.DEBUG)
+    smalltsdb.TSDB(kwargs['path']).sync()
 
 
 if __name__ == '__main__':
