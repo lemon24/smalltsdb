@@ -231,10 +231,15 @@ def intervals(period, tail, now, last_final):
         == [0:40, 0:50, 1:00], [1:10, 1:20, 1:30, 1:40]
 
     """
-    return (
-        (last_final + period, (now - tail) // period * period),
-        ((now - tail) // period * period, (now // period + 1) * period),
-    )
+    if last_final is None:
+        last_final = -period
+
+    final_start = last_final + period
+    final_end = (now - tail) // period * period
+    partial_start = final_end
+    partial_end = (now // period + 1) * period
+
+    return (final_start, final_end), (partial_start, partial_end)
 
 
 class TablesTSDB(BaseTSDB):
@@ -253,24 +258,68 @@ class TablesTSDB(BaseTSDB):
 
         return db
 
+    def _now(self):
+        return epoch_from_datetime(datetime.datetime.utcnow())
+
+    # FIXME
+    _tail = 60
+
     def sync(self):
         # TODO: improve performance by not using an aggregate function at all;
         # pull the whole dataset (sorted) into memory, instead
 
         # TODO: retention policies
-        # TODO: only sync data within a certain window and drop incoming data outside of it
+        # TODO: drop incoming data outside of the final windows
 
-        with self.db as db:
-            for name, seconds in PERIODS.items():
+        # TODO: long-running queries suppress KeyboardInterrupt until they are done
+        # TODO: run pragma optimize at the end
+
+        now = self._now()
+
+        for name, seconds in PERIODS.items():
+
+            with self.db as db:
                 start = datetime.datetime.now()
-                db.execute(
+
+                last_finals = db.execute(
                     f"""
-                    insert or replace into {name} (
-                        path, timestamp, n, min, max, avg, sum, p50, p90, p99
-                    )
-                    {sql_select_agg(seconds)};
+                    select incoming.path, max({name}.timestamp)
+                    from incoming left join {name} on incoming.path = {name}.path
+                    group by incoming.path;
                     """
                 )
+
+                for path, last_final in last_finals:
+                    (final_start, final_end), _ = intervals(
+                        seconds, self._tail, now, last_final
+                    )
+
+                    # TODO: set zeroes on the things without incoming values to mark them as final
+
+                    rows = db.execute(
+                        f"""
+                        insert or replace into {name} (
+                            path, timestamp, n, min, max, avg, sum, p50, p90, p99
+                        )
+                        select
+                            path,
+                            cast(timestamp as integer) / {seconds} * {seconds} as agg_ts,
+                            count(value),
+                            min(value),
+                            max(value),
+                            avg(value),
+                            sum(value),
+                            quantile(value, .5),
+                            quantile(value, .9),
+                            quantile(value, .99)
+                        from incoming
+                        where path = :path
+                            and timestamp between :start and :end
+                        group by path, agg_ts
+                        """,
+                        {'path': path, 'start': final_start, 'end': final_end},
+                    )
+
                 end = datetime.datetime.now()
                 log.debug("synced %s in %s", name, end - start)
 
@@ -279,6 +328,7 @@ class TwoDatabasesTSDB(TablesTSDB):
     def __init__(self, path, incoming_path=None):
         super().__init__(path)
         assert path not in (':memory:', ''), "anonymous databases not supported yet"
+        # TODO: handle anonymous databases (?)
         self.incoming_path = incoming_path or path + '.incoming'
 
     def _open_db(self):
