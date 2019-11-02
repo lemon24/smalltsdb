@@ -270,7 +270,6 @@ class TablesTSDB(BaseTSDB):
         # pull the whole dataset (sorted) into memory, instead
 
         # TODO: retention policies
-        # TODO: drop incoming data outside of the final windows
 
         # TODO: long-running queries suppress KeyboardInterrupt until they are done
         # TODO: run pragma optimize at the end
@@ -369,4 +368,4 @@ class TwoDatabasesTSDB(TablesTSDB):
         return db
 
 
-TSDB = ViewTSDB
+TSDB = TablesTSDB
