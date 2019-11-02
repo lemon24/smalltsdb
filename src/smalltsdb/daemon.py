@@ -147,7 +147,12 @@ def run_timer(seconds, func, *args):
 
 
 def run_daemon(
-    tsdb, server_address, queue, started_callback=None, received_callback=None
+    tsdb,
+    server_address,
+    queue,
+    started_callback=None,
+    received_callback=None,
+    self_metric_prefix=None,
 ):
 
     socketservers = run_socketservers(
@@ -164,11 +169,31 @@ def run_daemon(
     tuples = []
 
     def process():
+        # TODO: always emit a datapoint? (i.e. no missing metrics)
+        # TODO: tuples should not grow without limit, especially if insert fails forever
+
         if tuples:
-            tsdb.insert(tuples)
-            log.debug("inserted %s tuples", len(tuples))
-            # TODO: emit metrics here
-            tuples.clear()
+
+            if self_metric_prefix:
+                now = tsdb._now()
+                non_self_count = sum(
+                    1 for t in tuples if not t[0].startswith(f'{self_metric_prefix}.')
+                )
+                self_ok = [(f'{self_metric_prefix}.insert', now, non_self_count)]
+                self_error = [(f'{self_metric_prefix}.error', now, 1)]
+            else:
+                self_ok = []
+                self_error = []
+
+            try:
+                tsdb.insert(tuples + self_ok)
+                # TODO: this is a lie
+                log.debug("inserted %s tuples", non_self_count)
+                tuples.clear()
+            except Exception as e:
+                log.exception("error while inserting tuples: %s", e)
+                tuples.extend(self_error)
+                # and hope for the best
 
     with socketservers, timer:
         if started_callback:
@@ -220,6 +245,6 @@ def main(db_path):
 
     with contextlib.closing(TSDB(db_path)) as tsdb:
         # try:
-        run_daemon(tsdb, ('localhost', 1111), q)
+        run_daemon(tsdb, ('localhost', 1111), q, self_metric_prefix='smalltsdb.daemon')
     # finally:
     # pretty_print_table(tsdb.db, 'tensecond')

@@ -73,6 +73,9 @@ class BaseTSDB:
     def _open_db(self):
         raise NotImplementedError
 
+    def _now(self):
+        return epoch_from_datetime(datetime.datetime.utcnow())
+
     # public - lifecycle
 
     @property
@@ -258,9 +261,6 @@ class TablesTSDB(BaseTSDB):
             db.execute(sql_create_agg(name))
 
         return db
-
-    def _now(self):
-        return epoch_from_datetime(datetime.datetime.utcnow())
 
     # FIXME
     _tail = 60
