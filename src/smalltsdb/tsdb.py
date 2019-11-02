@@ -295,6 +295,13 @@ class TablesTSDB(BaseTSDB):
                     (final_start, final_end), _ = intervals(
                         seconds, self._tail, now, last_final
                     )
+                    log.debug(
+                        "syncing %s %s for [%s, %s)",
+                        name,
+                        path,
+                        datetime.datetime.utcfromtimestamp(final_start),
+                        datetime.datetime.utcfromtimestamp(final_end),
+                    )
 
                     # TODO: set zeroes on the things without incoming values to mark them as final
 
