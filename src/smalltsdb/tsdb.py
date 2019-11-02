@@ -332,6 +332,20 @@ class TablesTSDB(BaseTSDB):
                 end = datetime.datetime.now()
                 log.debug("synced %s in %s", name, end - start)
 
+        start = datetime.datetime.now()
+
+        delete_end = now - self._tail - max(PERIODS.values())
+        log.debug(
+            "deleting incoming datapoints older than %s",
+            datetime.datetime.utcfromtimestamp(delete_end),
+        )
+
+        with db:
+            db.execute("delete from incoming where timestamp < ?;", (delete_end,))
+
+        end = datetime.datetime.now()
+        log.debug("deleted old incoming in %s", end - start)
+
 
 class TwoDatabasesTSDB(TablesTSDB):
     def __init__(self, path, incoming_path=None):
