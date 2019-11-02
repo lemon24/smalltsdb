@@ -41,11 +41,13 @@ def test_integration(tmp_path, TSDB, socket_type, port):
     q = queue.Queue()
 
     started = threading.Event()
-    processed = threading.Event()
+    started_callback = started.set
+    received_queue = queue.Queue()
+    received_callback = lambda: received_queue.put(None)
 
     def run():
         tsdb = TSDB(db_path)
-        run_daemon(tsdb, server_address, q, started.set, processed.set)
+        run_daemon(tsdb, server_address, q, started_callback, received_callback)
 
     t = threading.Thread(target=run)
     t.start()
@@ -59,9 +61,9 @@ def test_integration(tmp_path, TSDB, socket_type, port):
             sock.connect(server_address)
             sock.send(message)
 
-    # we're waiting for 3 things to be processed before killing the server
-    for _ in range(3):
-        processed.wait()
+    # we're waiting for 3 things to be received before killing the server
+    for e in range(3):
+        received_queue.get()
 
     q.put(None)
     t.join()

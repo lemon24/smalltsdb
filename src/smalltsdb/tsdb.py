@@ -307,6 +307,7 @@ class TablesTSDB(BaseTSDB):
                     )
 
                     # TODO: set zeroes on the things without incoming values to mark them as final
+                    # TODO: maybe log the number of datapoints synced
 
                     rows = db.execute(
                         f"""

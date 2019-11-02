@@ -6,6 +6,7 @@ import queue
 import signal
 import socketserver
 import threading
+import time
 
 from . import TSDB
 
@@ -120,9 +121,35 @@ def run_socketservers(things, server_kwargs=None):
                 raise
 
 
+DONE = None
+TIME = object()
+
+
+@contextlib.contextmanager
+def run_timer(seconds, func, *args):
+    done = threading.Event()
+
+    def do_time():
+        to_sleep = seconds
+        while not done.wait(to_sleep):
+            start = time.monotonic()
+            func(*args)
+            to_sleep = start + seconds - time.monotonic()
+
+    thread = threading.Thread(target=do_time)
+
+    thread.start()
+    try:
+        yield
+    finally:
+        done.set()
+        thread.join()
+
+
 def run_daemon(
-    tsdb, server_address, queue, started_callback=None, processed_callback=None
+    tsdb, server_address, queue, started_callback=None, received_callback=None
 ):
+
     socketservers = run_socketservers(
         [
             (UDPServer, DatagramHandler, server_address),
@@ -130,17 +157,35 @@ def run_daemon(
         ],
         {'queue': queue},
     )
-    with socketservers:
+
+    # TODO: remove hardcoded interval
+    timer = run_timer(10, queue.put, TIME)
+
+    tuples = []
+
+    def process():
+        if tuples:
+            tsdb.insert(tuples)
+            log.debug("inserted %s tuples", len(tuples))
+            # TODO: emit metrics here
+            tuples.clear()
+
+    with socketservers, timer:
         if started_callback:
             started_callback()
+
         while True:
-            t = queue.get()
-            if t is None:
+            thing = queue.get()
+            if thing is DONE:
+                process()
                 break
-            tsdb.insert(t)
-            if processed_callback:
-                processed_callback()
-            # TODO: emit metrics here
+            if thing is TIME:
+                process()
+                continue
+            tuples.extend(thing)
+            if received_callback:
+                print('\n---', thing)
+                received_callback()
 
 
 def pretty_print_table(db, table):
@@ -167,11 +212,11 @@ def main(db_path):
     # a priority queue could be used to make sure "control" messages get there first
 
     def signal_done(_, __):
-        q.put(None)
+        q.put(DONE)
 
     signal.signal(signal.SIGTERM, signal_done)
 
-    logging.getLogger('smalltsdb').info("using db: %r", db_path)
+    log.info("using db: %r", db_path)
 
     with contextlib.closing(TSDB(db_path)) as tsdb:
         # try:
