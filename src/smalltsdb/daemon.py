@@ -209,7 +209,6 @@ def run_daemon(
                 continue
             tuples.extend(thing)
             if received_callback:
-                print('\n---', thing)
                 received_callback()
 
 
