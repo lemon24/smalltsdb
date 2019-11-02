@@ -281,11 +281,16 @@ class TablesTSDB(BaseTSDB):
             with self.db as db:
                 start = datetime.datetime.now()
 
+                log.debug("getting %s last finals", name)
                 last_finals = db.execute(
                     f"""
-                    select incoming.path, max({name}.timestamp)
-                    from incoming left join {name} on incoming.path = {name}.path
-                    group by incoming.path;
+                    with
+                    paths(path) as (
+                        select distinct path from incoming
+                    )
+                    select paths.path, max({name}.timestamp)
+                    from paths left join {name} on paths.path = {name}.path
+                    group by paths.path;
                     """
                 )
 
