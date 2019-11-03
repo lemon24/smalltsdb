@@ -200,14 +200,16 @@ def run_daemon(
             started_callback()
 
         while True:
-            thing = queue.get()
-            if thing is DONE:
+            it = queue.get()
+
+            if it is DONE:
                 process()
                 break
-            if thing is TIME:
+            if it is TIME:
                 process()
                 continue
-            tuples.extend(thing)
+            tuples.extend(it)
+
             if received_callback:
                 received_callback()
 
