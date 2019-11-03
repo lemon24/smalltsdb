@@ -294,6 +294,11 @@ class TablesTSDB(BaseTSDB):
                     """
                 )
 
+                # exhaust the cursor so we don't get any weird "database is locked" errors
+                # https://github.com/lemon24/smalltsdb/issues/2#issuecomment-549119926
+                # TODO: this can fill up the memory if there are a lot of metrics, either paginate it or shove it into a temp table
+                last_finals = list(last_finals)
+
                 for path, last_final in last_finals:
                     (final_start, final_end), _ = intervals(
                         seconds, self._tail, now, last_final
