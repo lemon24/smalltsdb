@@ -78,6 +78,8 @@ class BaseTSDB:
 
     # public - lifecycle
 
+    # TODO: split the incoming/sync/agg connections
+
     @property
     def db(self):
         if not self._db:
@@ -273,6 +275,8 @@ class TablesTSDB(BaseTSDB):
 
         # TODO: long-running queries suppress KeyboardInterrupt until they are done
         # TODO: run pragma optimize at the end
+        # TODO: maybe vacuum at the end
+        # TODO: cap the time the queries run via interrupt()
 
         now = self._now()
 
