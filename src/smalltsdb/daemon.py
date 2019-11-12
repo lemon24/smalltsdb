@@ -174,11 +174,11 @@ def run_daemon(
 
         if tuples:
 
+            non_self_count = sum(
+                1 for t in tuples if not t[0].startswith(f'{self_metric_prefix}.')
+            )
             if self_metric_prefix:
                 now = tsdb._now()
-                non_self_count = sum(
-                    1 for t in tuples if not t[0].startswith(f'{self_metric_prefix}.')
-                )
                 self_ok = [(f'{self_metric_prefix}.insert', now, non_self_count)]
                 self_error = [(f'{self_metric_prefix}.error', now, 1)]
             else:
