@@ -228,10 +228,6 @@ def pretty_print_table(db, table):
 
 
 def main(db_path):
-    # TODO: refactor so logging setup and other stuff can go to the CLI
-    logging.basicConfig()
-    logging.getLogger('smalltsdb').setLevel(logging.DEBUG)
-
     q = queue.Queue()
 
     # telling it nicely to stop;
