@@ -2,6 +2,7 @@ import collections
 import datetime
 import logging
 import sqlite3
+import time
 from contextlib import contextmanager
 
 import numpy
@@ -64,6 +65,17 @@ def epoch_from_datetime(dt):
     return (dt - datetime.datetime(1970, 1, 1)) / datetime.timedelta(seconds=1)
 
 
+@contextmanager
+def timing(msg, *args):
+    start = time.monotonic()
+    log.debug("timing start: " + msg, *args)
+    try:
+        yield
+    finally:
+        end = time.monotonic()
+        log.debug("timing end (%.2fs): " + msg, end - start, *args)
+
+
 class BaseTSDB:
     def __init__(self):
         self._db = None
@@ -109,17 +121,18 @@ class BaseTSDB:
         if isinstance(end, datetime.datetime):
             end = epoch_from_datetime(end)
 
-        rows = self.db.execute(
-            f"""
-            select timestamp, {stat}
-            from {period}
-            where path = :path
-                and timestamp between :start and :end
-            order by timestamp;
-            """,
-            {'path': path, 'start': start, 'end': end},
-        )
-        return list(rows)
+        with timing("get_metric"):
+            rows = self.db.execute(
+                f"""
+                select timestamp, {stat}
+                from {period}
+                where path = :path
+                    and timestamp between :start and :end
+                order by timestamp;
+                """,
+                {'path': path, 'start': start, 'end': end},
+            )
+            return list(rows)
 
     def list_metrics(self):
         # TODO: find a better name
@@ -128,8 +141,9 @@ class BaseTSDB:
         parts = [f"select distinct path from {period}" for period in PERIODS]
         query = "\nunion\n".join(parts) + ";"
 
-        for row in self.db.execute(query):
-            yield row[0]
+        # TODO: can exhaust memory, paginate
+        with timing("list_metrics"):
+            return [row[0] for row in self.db.execute(query)]
 
 
 def sql_create_incoming(schema='main'):
@@ -278,82 +292,72 @@ class TablesTSDB(BaseTSDB):
 
         for name, seconds in PERIODS.items():
 
-            with self.db as db:
+            with self.db as db, timing("sync period: %s", name):
                 start = datetime.datetime.now()
 
-                log.debug("getting %s last finals", name)
-                last_finals = db.execute(
-                    f"""
-                    with
-                    paths(path) as (
-                        select distinct path from incoming
+                with timing("sync last finals: %s", name):
+                    last_finals = db.execute(
+                        f"""
+                        with
+                        paths(path) as (
+                            select distinct path from incoming
+                        )
+                        select paths.path, max({name}.timestamp)
+                        from paths left join {name} on paths.path = {name}.path
+                        group by paths.path;
+                        """
                     )
-                    select paths.path, max({name}.timestamp)
-                    from paths left join {name} on paths.path = {name}.path
-                    group by paths.path;
-                    """
-                )
 
-                # exhaust the cursor so we don't get any weird "database is locked" errors
-                # https://github.com/lemon24/smalltsdb/issues/2#issuecomment-549119926
-                # TODO: this can fill up the memory if there are a lot of metrics, either paginate it or shove it into a temp table
-                last_finals = list(last_finals)
+                    # exhaust the cursor so we don't get any weird "database is locked" errors
+                    # https://github.com/lemon24/smalltsdb/issues/2#issuecomment-549119926
+                    # TODO: this can fill up the memory if there are a lot of metrics, either paginate it or shove it into a temp table
+                    last_finals = list(last_finals)
 
                 for path, last_final in last_finals:
                     (final_start, final_end), _ = intervals(
                         seconds, self._tail, now, last_final
                     )
-                    log.debug(
-                        "syncing %s %s for [%s, %s)",
+                    with timing(
+                        "sync path: %s %s for [%s, %s)",
                         name,
                         path,
                         datetime.datetime.utcfromtimestamp(final_start),
                         datetime.datetime.utcfromtimestamp(final_end),
-                    )
+                    ):
 
-                    # TODO: set zeroes on the things without incoming values to mark them as final
-                    # TODO: maybe log the number of datapoints synced
+                        # TODO: set zeroes on the things without incoming values to mark them as final
+                        # TODO: maybe log the number of datapoints synced
 
-                    rows = db.execute(
-                        f"""
-                        insert or replace into {name} (
-                            path, timestamp, n, min, max, avg, sum, p50, p90, p99
+                        rows = db.execute(
+                            f"""
+                            insert or replace into {name} (
+                                path, timestamp, n, min, max, avg, sum, p50, p90, p99
+                            )
+                            select
+                                path,
+                                cast(timestamp as integer) / {seconds} * {seconds} as agg_ts,
+                                count(value),
+                                min(value),
+                                max(value),
+                                avg(value),
+                                sum(value),
+                                quantile(value, .5),
+                                quantile(value, .9),
+                                quantile(value, .99)
+                            from incoming
+                            where path = :path
+                                and timestamp between :start and :end
+                            group by path, agg_ts
+                            """,
+                            {'path': path, 'start': final_start, 'end': final_end},
                         )
-                        select
-                            path,
-                            cast(timestamp as integer) / {seconds} * {seconds} as agg_ts,
-                            count(value),
-                            min(value),
-                            max(value),
-                            avg(value),
-                            sum(value),
-                            quantile(value, .5),
-                            quantile(value, .9),
-                            quantile(value, .99)
-                        from incoming
-                        where path = :path
-                            and timestamp between :start and :end
-                        group by path, agg_ts
-                        """,
-                        {'path': path, 'start': final_start, 'end': final_end},
-                    )
-
-                end = datetime.datetime.now()
-                log.debug("synced %s in %s", name, end - start)
-
-        start = datetime.datetime.now()
 
         delete_end = now - self._tail - max(PERIODS.values())
-        log.debug(
-            "deleting incoming datapoints older than %s",
+        with self.db as db, timing(
+            "delete incoming: older than %s",
             datetime.datetime.utcfromtimestamp(delete_end),
-        )
-
-        with db:
+        ):
             db.execute("delete from incoming where timestamp < ?;", (delete_end,))
-
-        end = datetime.datetime.now()
-        log.debug("deleted old incoming in %s", end - start)
 
 
 class TwoDatabasesTSDB(TablesTSDB):
