@@ -27,6 +27,7 @@ setup(
     install_requires=['numpy'],
     extras_require={
         'daemon': ['click'],
+        'sync': ['fasteners'],
         'web-app': ['flask', 'bokeh', 'iso8601'],
         'dev': [
             # tests

@@ -37,9 +37,19 @@ def daemon(kwargs):
 
 
 @cli.command()
+@click.option('--lock-file', type=click.Path(dir_okay=False, resolve_path=True))
 @click.pass_obj
-def sync(kwargs):
+def sync(kwargs, lock_file):
     setup_logging(logging.DEBUG)
+
+    # TODO: maybe move this into the main thing?
+    if lock_file:
+        from fasteners.process_lock import InterProcessLock
+
+        lock = InterProcessLock(lock_file)
+        if not lock.acquire(blocking=False):
+            raise click.ClickException("could not acquire lock: {}".format(lock_file))
+
     smalltsdb.TSDB(kwargs['path']).sync()
 
 
