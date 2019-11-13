@@ -1,8 +1,12 @@
 import logging
+import resource
 
 import click
 
 import smalltsdb.daemon
+
+
+log = logging.getLogger('smalltsdb')
 
 
 @click.group()
@@ -19,7 +23,6 @@ def cli(ctx, db):
 
 
 def setup_logging(level):
-    log = logging.getLogger('smalltsdb')
     log.setLevel(level)
     handler = logging.StreamHandler()
     formatter = logging.Formatter(
@@ -50,7 +53,15 @@ def sync(kwargs, lock_file):
         if not lock.acquire(blocking=False):
             raise click.ClickException("could not acquire lock: {}".format(lock_file))
 
-    smalltsdb.TSDB(kwargs['path']).sync()
+    try:
+        smalltsdb.TSDB(kwargs['path']).sync()
+    finally:
+        # TODO: is this the correct level?
+        # TODO: this should probably be a metric
+        log.debug(
+            "sync probably done, maxrss: %.2f MiB",
+            resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2 ** 20,
+        )
 
 
 if __name__ == '__main__':
