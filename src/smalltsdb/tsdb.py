@@ -282,6 +282,10 @@ class TablesTSDB(BaseTSDB):
     _tail = 60
 
     def sync(self):
+        with timing("sync all"):
+            self._sync()
+
+    def _sync(self):
         # TODO: improve performance by not using an aggregate function at all;
         # pull the whole dataset (sorted) into memory, instead
 
