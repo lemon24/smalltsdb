@@ -271,10 +271,17 @@ class TablesTSDB(BaseTSDB):
 
         db.execute(sql_create_incoming())
 
+        # TODO: temporary, maybe delete me
+        db.execute(
+            f"create index if not exists incoming_index on incoming(path, timestamp);"
+        )
+
         # TODO: create index incoming_index on incoming(path, timestamp)?
 
         for name, seconds in PERIODS.items():
             db.execute(sql_create_agg(name))
+
+            # TODO: temporary, maybe delete me
             db.execute(
                 f"create index if not exists {name}_index on {name}(path, timestamp);"
             )
