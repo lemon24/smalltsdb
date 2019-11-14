@@ -275,6 +275,9 @@ class TablesTSDB(BaseTSDB):
 
         for name, seconds in PERIODS.items():
             db.execute(sql_create_agg(name))
+            db.execute(
+                f"create index if not exists {name}_index on {name}(path, timestamp);"
+            )
 
         return db
 
