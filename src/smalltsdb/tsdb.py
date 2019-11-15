@@ -108,9 +108,8 @@ class BaseTSDB:
     # public - convenience methods
 
     def insert(self, tuples):
-        with self.db:
-            for t in tuples:
-                self.db.execute("insert into incoming values (?, ?, ?);", t)
+        with self.db as db:
+            db.executemany("insert into incoming values (?, ?, ?);", tuples)
 
     def get_metric(self, path, period, stat, interval):
         # TODO: these should be ValueError
