@@ -240,7 +240,7 @@ def main(db_path):
 
     log.info("using db: %r", db_path)
 
-    with contextlib.closing(TSDB(db_path)) as tsdb:
+    with contextlib.closing(TSDB(db_path, with_aggregate=False)) as tsdb:
         # try:
         run_daemon(tsdb, ('localhost', 1111), q, self_metric_prefix='smalltsdb.daemon')
     # finally:

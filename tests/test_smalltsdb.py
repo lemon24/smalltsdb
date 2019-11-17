@@ -46,7 +46,7 @@ def test_integration(tmp_path, TSDB, socket_type, port):
     received_callback = lambda: received_queue.put(None)
 
     def run():
-        tsdb = TSDB(db_path)
+        tsdb = TSDB(db_path, with_aggregate=False)
         run_daemon(tsdb, server_address, q, started_callback, received_callback)
 
     t = threading.Thread(target=run)

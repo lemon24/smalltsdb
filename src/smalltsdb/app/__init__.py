@@ -35,7 +35,7 @@ blueprint.add_app_template_global(PERIODS, 'PERIODS')
 
 def get_db():
     if not hasattr(g, 'db'):
-        tsdb = TSDB(current_app.config['SMALLTSDB_DB'])
+        tsdb = TSDB(current_app.config['SMALLTSDB_DB'], with_incoming=False)
         """
         tsdb = TSDB(':memory:')
         tsdb.insert(
