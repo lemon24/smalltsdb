@@ -351,6 +351,7 @@ class TablesTSDB(BaseTSDB):
 
                         # TODO: set zeroes on the things without incoming values to mark them as final
                         # TODO: maybe log the number of datapoints synced
+                        # TODO: sort the datapoints before group by (it may speed quantile() up)
 
                         rows = db.execute(
                             f"""
