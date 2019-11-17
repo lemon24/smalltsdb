@@ -178,6 +178,7 @@ def run_daemon(
                 1 for t in tuples if not t[0].startswith(f'{self_metric_prefix}.')
             )
             if self_metric_prefix:
+                # TODO: also emit timings, not just counts
                 now = tsdb._now()
                 self_ok = [(f'{self_metric_prefix}.insert', now, non_self_count)]
                 self_error = [(f'{self_metric_prefix}.error', now, 1)]

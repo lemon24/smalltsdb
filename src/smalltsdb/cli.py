@@ -54,7 +54,7 @@ def sync(kwargs, lock_file):
             raise click.ClickException("could not acquire lock: {}".format(lock_file))
 
     try:
-        smalltsdb.TSDB(kwargs['path']).sync()
+        smalltsdb.TSDB(kwargs['path'], self_metric_prefix='smalltsdb').sync()
     finally:
         # TODO: is this the correct level?
         # TODO: this should probably be a metric

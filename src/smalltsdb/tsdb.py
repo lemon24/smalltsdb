@@ -69,11 +69,14 @@ def epoch_from_datetime(dt):
 def timing(msg, *args):
     start = time.monotonic()
     log.debug("timing start: " + msg, *args)
+    result = [start]
     try:
-        yield
+        yield result
     finally:
         end = time.monotonic()
-        log.debug("timing end (%.2fs): " + msg, end - start, *args)
+        duration = end - start
+        log.debug("timing end (%.2fs): " + msg, duration, *args)
+        result.append(duration)
 
 
 class BaseTSDB:
@@ -268,9 +271,12 @@ def intervals(period, tail, now, last_final):
 
 
 class TablesTSDB(BaseTSDB):
-    def __init__(self, path, *, with_incoming=True, with_aggregate=True):
+    def __init__(
+        self, path, *, with_incoming=True, with_aggregate=True, self_metric_prefix=None
+    ):
         super().__init__(with_incoming, with_aggregate)
         self.path = path
+        self.self_metric_prefix = self_metric_prefix
 
     def _open_db(self):
         db = sqlite3.connect(self.path)
@@ -298,8 +304,16 @@ class TablesTSDB(BaseTSDB):
 
     def sync(self):
         assert self._with_aggregate and self._with_incoming
-        with timing("sync all"):
-            self._sync()
+
+        # TODO: there must be a better way of collecting timings
+        with timing("sync all") as timing_result:
+            timings = self._sync()
+        timings.append(('all',) + tuple(timing_result))
+
+        if self.self_metric_prefix:
+            self.insert(
+                (f'{self.self_metric_prefix}.sync.{t[0]}',) + t[1:] for t in timings
+            )
 
     def _sync(self):
         # TODO: improve performance by not using an aggregate function at all;
@@ -314,12 +328,16 @@ class TablesTSDB(BaseTSDB):
 
         now = self._now()
 
+        timing_results = []
+
         for name, seconds in PERIODS.items():
 
-            with self.db as db, timing("sync period: %s", name):
-                start = datetime.datetime.now()
+            with self.db as db, timing("sync period: %s", name) as timing_result:
+                timing_results.append((f'{name}.all', timing_result))
 
-                with timing("sync last finals: %s", name):
+                with timing("sync last finals: %s", name) as timing_result:
+                    timing_results.append((f'{name}.finals_query', timing_result))
+
                     last_finals = db.execute(
                         f"""
                         with
@@ -347,7 +365,8 @@ class TablesTSDB(BaseTSDB):
                         path,
                         datetime.datetime.utcfromtimestamp(final_start),
                         datetime.datetime.utcfromtimestamp(final_end),
-                    ):
+                    ) as timing_result:
+                        timing_results.append((f'{name}.sync_query', timing_result))
 
                         # TODO: set zeroes on the things without incoming values to mark them as final
                         # TODO: maybe log the number of datapoints synced
@@ -381,16 +400,29 @@ class TablesTSDB(BaseTSDB):
         with self.db as db, timing(
             "delete incoming: older than %s",
             datetime.datetime.utcfromtimestamp(delete_end),
-        ):
+        ) as timing_result:
+            timing_results.append((f'delete_incoming_query', timing_result))
             db.execute("delete from incoming where timestamp < ?;", (delete_end,))
+
+        timings = [(p,) + tuple(tr) for p, tr in timing_results]
+        return timings
 
 
 class TwoDatabasesTSDB(TablesTSDB):
     def __init__(
-        self, path, incoming_path=None, *, with_incoming=True, with_aggregate=True
+        self,
+        path,
+        incoming_path=None,
+        *,
+        with_incoming=True,
+        with_aggregate=True,
+        self_metric_prefix=None,
     ):
         super().__init__(
-            path, with_incoming=with_incoming, with_aggregate=with_aggregate
+            path,
+            with_incoming=with_incoming,
+            with_aggregate=with_aggregate,
+            self_metric_prefix=self_metric_prefix,
         )
         if incoming_path is None:
             incoming_path = path
