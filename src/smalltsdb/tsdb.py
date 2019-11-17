@@ -370,7 +370,7 @@ class TablesTSDB(BaseTSDB):
 
                         # TODO: set zeroes on the things without incoming values to mark them as final
                         # TODO: maybe log the number of datapoints synced
-                        # TODO: sort the datapoints before group by (it may speed quantile() up)
+                        # TODO: sort the datapoints before group by (it may speed quantile() up); do this after gathering sync metrics
 
                         rows = db.execute(
                             f"""
