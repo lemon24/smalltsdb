@@ -2,9 +2,6 @@ from collections.abc import Mapping
 from collections.abc import Sequence
 
 
-# dict flattening
-
-
 def flatten_dict(d, dict=dict, max_depth=10):
     """{'a': {'b': 1, 'c': 2}} -> {'a.b': 1, 'a.c': 2}"""
     rv = dict()
@@ -50,48 +47,6 @@ def unflatten_dict(d, dict=dict, max_depth=10):
     return rv
 
 
-ud = {'1': {'b': {'0': 'c', '1': 'd'}}}
-fd = {'1.b.0': 'c', '1.b.1': 'd'}
-
-assert flatten_dict(ud) == fd
-assert unflatten_dict(fd) == ud
-
-
-ud = {'a': {'b': 1, 'c': 2}, 'd': [3, 4], 'e': 5}
-
-fd = {'a.b': 1, 'a.c': 2, 'd': [3, 4], 'e': 5}
-
-assert flatten_dict(ud) == flatten_dict(fd) == fd
-assert unflatten_dict(fd) == unflatten_dict(ud) == ud
-
-
-ud = {'a': {'b': 1, 'c': {'d': 2}}, 'e': {'f': 3}, 'g': 4}
-
-fd = {'a.b': 1, 'a.c.d': 2, 'e.f': 3, 'g': 4}
-
-
-assert flatten_dict(ud) == flatten_dict(fd) == fd
-assert unflatten_dict(fd) == unflatten_dict(ud) == ud
-
-flatten_dict(ud, max_depth=3)
-unflatten_dict(fd, max_depth=3)
-
-try:
-    flatten_dict(ud, max_depth=2)
-    raise Exception("should have raised ValueError")
-except ValueError:
-    pass
-
-try:
-    unflatten_dict(fd, max_depth=2)
-    raise Exception("should have raised ValueError")
-except ValueError:
-    pass
-
-
-# int keys to list and back
-
-
 def int_keys_to_list(d, dict=dict, max_depth=10):
     if not isinstance(d, Mapping):
         return d
@@ -114,9 +69,12 @@ def int_keys_to_list(d, dict=dict, max_depth=10):
     return [v for _, v in sorted(d.items())]
 
 
+def is_nonstring_sequence(o):
+    return isinstance(o, Sequence) and not isinstance(o, (str, bytes))
+
+
 def list_to_int_keys(d, dict=dict, max_depth=10):
-    # strings are also Sequences, so list it is
-    if not isinstance(d, list) and not isinstance(d, Mapping):
+    if not is_nonstring_sequence(d) and not isinstance(d, Mapping):
         return d
 
     if not isinstance(d, Mapping):
@@ -130,56 +88,9 @@ def list_to_int_keys(d, dict=dict, max_depth=10):
     return d
 
 
-ik = {'0': 'a', '1': {'b': {'0': 'c', '1': 'd'}, '1': 'e'}}
-ld = ['a', {'b': ['c', 'd'], '1': 'e'}]
-
-assert int_keys_to_list(ik) == int_keys_to_list(ld) == ld
-assert list_to_int_keys(ld) == list_to_int_keys(ik) == ik
-
-int_keys_to_list(ik, max_depth=3)
-list_to_int_keys(ld, max_depth=3)
-
-try:
-    int_keys_to_list(ik, max_depth=2)
-    raise Exception("should have raised ValueError")
-except ValueError:
-    pass
-
-try:
-    list_to_int_keys(ld, max_depth=2)
-    raise Exception("should have raised ValueError")
-except ValueError:
-    pass
-
-try:
-    int_keys_to_list({'1': 'a'})
-    raise Exception("should have raised ValueError")
-except ValueError:
-    pass
-
-try:
-    int_keys_to_list({'0': 'a', '2': 'b'})
-    raise Exception("should have raised ValueError")
-except ValueError:
-    pass
+def flatten(d, max_depth=10):
+    return flatten_dict(list_to_int_keys(d, max_depth=max_depth), max_depth=max_depth)
 
 
-# wrapping up
-
-
-def flatten(d):
-    return flatten_dict(list_to_int_keys(d))
-
-
-def unflatten(d):
-    return int_keys_to_list(unflatten_dict(d))
-
-
-assert unflatten(flatten(ld)) == ld
-
-
-if __name__ == '__main__':
-    from pprint import pprint
-
-    pprint(ld)
-    pprint(flatten(ld))
+def unflatten(d, max_depth=10):
+    return int_keys_to_list(unflatten_dict(d, max_depth=max_depth), max_depth=max_depth)
