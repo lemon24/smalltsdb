@@ -77,8 +77,10 @@ def timing(msg, *args):
 
 
 class BaseTSDB:
-    def __init__(self):
+    def __init__(self, with_incoming, with_aggregate):
         self._db = None
+        self._with_incoming = with_incoming
+        self._with_aggregate = with_aggregate
 
     # private
 
@@ -89,8 +91,6 @@ class BaseTSDB:
         return epoch_from_datetime(datetime.datetime.utcnow())
 
     # public - lifecycle
-
-    # TODO: split the incoming/sync/agg connections
 
     @property
     def db(self):
@@ -108,10 +108,13 @@ class BaseTSDB:
     # public - convenience methods
 
     def insert(self, tuples):
+        assert self._with_incoming
         with self.db as db:
             db.executemany("insert into incoming values (?, ?, ?);", tuples)
 
     def get_metric(self, path, period, stat, interval):
+        assert self._with_aggregate
+
         # TODO: these should be ValueError
         assert period in PERIODS
         assert stat in STATS
@@ -136,6 +139,7 @@ class BaseTSDB:
             return list(rows)
 
     def list_metrics(self):
+        assert self._with_aggregate
         # TODO: find a better name
         # TODO: what period should we be looking at? all! but make it faster please
 
@@ -194,15 +198,19 @@ def sql_select_agg(seconds):
 
 
 class ViewTSDB(BaseTSDB):
-    def __init__(self, path):
-        super().__init__()
+    def __init__(self, path, *, with_incoming=True, with_aggregate=True):
+        super().__init__(with_incoming, with_aggregate)
         self.path = path
 
     def _open_db(self):
         db = sqlite3.connect(self.path)
-        db.create_aggregate('quantile', 2, QuantileAggregate)
 
         db.execute(sql_create_incoming())
+
+        if not self._with_aggregate:
+            return db
+
+        db.create_aggregate('quantile', 2, QuantileAggregate)
 
         for name, seconds in PERIODS.items():
             db.execute(
@@ -260,30 +268,28 @@ def intervals(period, tail, now, last_final):
 
 
 class TablesTSDB(BaseTSDB):
-    def __init__(self, path):
-        super().__init__()
+    def __init__(self, path, *, with_incoming=True, with_aggregate=True):
+        super().__init__(with_incoming, with_aggregate)
         self.path = path
 
     def _open_db(self):
         db = sqlite3.connect(self.path)
-        db.create_aggregate('quantile', 2, QuantileAggregate)
 
-        db.execute(sql_create_incoming())
+        if self._with_incoming and self._with_aggregate:
+            db.create_aggregate('quantile', 2, QuantileAggregate)
 
-        # TODO: temporary, maybe delete me
-        db.execute(
-            f"create index if not exists incoming_index on incoming(path, timestamp);"
-        )
-
-        # TODO: create index incoming_index on incoming(path, timestamp)?
-
-        for name, seconds in PERIODS.items():
-            db.execute(sql_create_agg(name))
-
-            # TODO: temporary, maybe delete me
+        if self._with_incoming:
+            db.execute(sql_create_incoming())
             db.execute(
-                f"create index if not exists {name}_index on {name}(path, timestamp);"
+                f"create index if not exists incoming_index on incoming(path, timestamp);"
             )
+
+        if self._with_aggregate:
+            for name, seconds in PERIODS.items():
+                db.execute(sql_create_agg(name))
+                db.execute(
+                    f"create index if not exists {name}_index on {name}(path, timestamp);"
+                )
 
         return db
 
@@ -291,6 +297,7 @@ class TablesTSDB(BaseTSDB):
     _tail = 60
 
     def sync(self):
+        assert self._with_aggregate and self._with_incoming
         with timing("sync all"):
             self._sync()
 
@@ -378,8 +385,12 @@ class TablesTSDB(BaseTSDB):
 
 
 class TwoDatabasesTSDB(TablesTSDB):
-    def __init__(self, path, incoming_path=None):
-        super().__init__(path)
+    def __init__(
+        self, path, incoming_path=None, *, with_incoming=True, with_aggregate=True
+    ):
+        super().__init__(
+            path, with_incoming=with_incoming, with_aggregate=with_aggregate
+        )
         if incoming_path is None:
             incoming_path = path
             if path not in (':memory:', ''):
@@ -387,15 +398,25 @@ class TwoDatabasesTSDB(TablesTSDB):
         self.incoming_path = incoming_path
 
     def _open_db(self):
+        # TODO: this looks almost the same as TablesTSDB._open_db; dedupe
         db = sqlite3.connect(self.path)
-        db.create_aggregate('quantile', 2, QuantileAggregate)
 
-        db.execute("attach database ? as aux;", (self.incoming_path,))
+        if self._with_incoming and self._with_aggregate:
+            db.create_aggregate('quantile', 2, QuantileAggregate)
 
-        db.execute(sql_create_incoming('aux'))
+        if self._with_incoming:
+            db.execute("attach database ? as aux;", (self.incoming_path,))
+            db.execute(sql_create_incoming('aux'))
+            db.execute(
+                f"create index if not exists aux.incoming_index on incoming(path, timestamp);"
+            )
 
-        for name, seconds in PERIODS.items():
-            db.execute(sql_create_agg(name))
+        if self._with_aggregate:
+            for name, seconds in PERIODS.items():
+                db.execute(sql_create_agg(name))
+                db.execute(
+                    f"create index if not exists {name}_index on {name}(path, timestamp);"
+                )
 
         return db
 
