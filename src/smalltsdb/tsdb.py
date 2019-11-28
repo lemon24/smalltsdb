@@ -67,6 +67,7 @@ def epoch_from_datetime(dt):
 
 @contextmanager
 def timing(msg, *args):
+    # TODO: also psutil.Process.io_counters() and .cpu_times() and .memory_info()
     start = time.monotonic()
     log.debug("timing start: " + msg, *args)
     result = [start]
