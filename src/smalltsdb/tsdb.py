@@ -70,7 +70,7 @@ def timing(msg, *args):
     # TODO: also psutil.Process.io_counters() and .cpu_times() and .memory_info()
     start = time.monotonic()
     log.debug("timing start: " + msg, *args)
-    result = [start]
+    result = [TSDB._now()]
     try:
         yield result
     finally:
@@ -91,7 +91,8 @@ class BaseTSDB:
     def _open_db(self):
         raise NotImplementedError
 
-    def _now(self):
+    @staticmethod
+    def _now():
         return epoch_from_datetime(datetime.datetime.utcnow())
 
     # public - lifecycle
