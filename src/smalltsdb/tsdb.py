@@ -65,19 +65,30 @@ def epoch_from_datetime(dt):
     return (dt - datetime.datetime(1970, 1, 1)) / datetime.timedelta(seconds=1)
 
 
-@contextmanager
-def timing(msg, *args):
-    # TODO: also psutil.Process.io_counters() and .cpu_times() and .memory_info()
-    start = time.monotonic()
-    log.debug("timing start: " + msg, *args)
-    result = [TSDB._now()]
-    try:
-        yield result
-    finally:
-        end = time.monotonic()
-        duration = end - start
-        log.debug("timing end (%.2fs): " + msg, duration, *args)
-        result.append(duration)
+class Timing:
+    def __init__(self):
+        self.timings = collections.deque()
+
+    @contextmanager
+    def __call__(self, msg, *args, name=None):
+        # TODO: also psutil.Process.io_counters() and .cpu_times() and .memory_info()
+        # TODO: multiple callbacks ^
+        start = time.monotonic()
+        # TODO: log outside of the timing interval
+        # TODO: no need for fancy log formatting here, can be moved outside
+        log.debug("timing start: " + msg, *args)
+        start_utc = TSDB._now()
+        try:
+            yield
+        finally:
+            end = time.monotonic()
+            duration = end - start
+            log.debug("timing end (%.2fs): " + msg, duration, *args)
+            if name:
+                self.timings.append((name, start_utc, duration))
+
+
+timing = Timing()
 
 
 class BaseTSDB:
@@ -308,14 +319,17 @@ class TablesTSDB(BaseTSDB):
         assert self._with_aggregate and self._with_incoming
 
         # TODO: there must be a better way of collecting timings
-        with timing("sync all") as timing_result:
-            timings = self._sync()
-        timings.append(('all',) + tuple(timing_result))
+        with timing("sync all", name='all'):
+            self._sync()
 
         if self.self_metric_prefix:
-            self.insert(
-                (f'{self.self_metric_prefix}.sync.{t[0]}',) + t[1:] for t in timings
-            )
+            try:
+                self.insert(
+                    (f'{self.self_metric_prefix}.sync.{t[0]}',) + t[1:]
+                    for t in timing.timings
+                )
+            finally:
+                timing.timings.clear()
 
     def _sync(self):
         # TODO: improve performance by not using an aggregate function at all;
@@ -334,11 +348,8 @@ class TablesTSDB(BaseTSDB):
 
         for name, seconds in PERIODS.items():
 
-            with self.db as db, timing("sync period: %s", name) as timing_result:
-                timing_results.append((f'{name}.all', timing_result))
-
-                with timing("sync last finals: %s", name) as timing_result:
-                    timing_results.append((f'{name}.finals_query', timing_result))
+            with self.db as db, timing("sync period: %s", name, name=f'{name}.all'):
+                with timing("sync last finals: %s", name, name=f'{name}.finals_query'):
 
                     last_finals = db.execute(
                         f"""
@@ -367,8 +378,8 @@ class TablesTSDB(BaseTSDB):
                         path,
                         datetime.datetime.utcfromtimestamp(final_start),
                         datetime.datetime.utcfromtimestamp(final_end),
-                    ) as timing_result:
-                        timing_results.append((f'{name}.sync_query', timing_result))
+                        name=f'{name}.sync_query',
+                    ):
 
                         # TODO: set zeroes on the things without incoming values to mark them as final
                         # TODO: maybe log the number of datapoints synced
@@ -402,12 +413,9 @@ class TablesTSDB(BaseTSDB):
         with self.db as db, timing(
             "delete incoming: older than %s",
             datetime.datetime.utcfromtimestamp(delete_end),
-        ) as timing_result:
-            timing_results.append((f'delete_incoming_query', timing_result))
+            name=f'delete_incoming_query',
+        ):
             db.execute("delete from incoming where timestamp < ?;", (delete_end,))
-
-        timings = [(p,) + tuple(tr) for p, tr in timing_results]
-        return timings
 
 
 class TwoDatabasesTSDB(TablesTSDB):
