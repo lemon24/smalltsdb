@@ -67,6 +67,7 @@ def epoch_from_datetime(dt):
 
 class Timing:
     def __init__(self):
+        self.callbacks = [('time', time.monotonic)]
         self.timings = collections.deque()
 
     @contextmanager
@@ -75,15 +76,30 @@ class Timing:
         # TODO: multiple callbacks ^
         log.debug("timing start: %s", name)
         start_utc = TSDB._now()
-        start = time.monotonic()
+
+        times = {}
+        for timing_name, timing_callback in self.callbacks:
+            times[timing_name] = timing_callback()
+
         try:
             yield
         finally:
-            end = time.monotonic()
-            duration = end - start
-            log.debug("timing end: %s: %.2f", name, duration)
-            if name:
-                self.timings.append((name, start_utc, duration))
+            for timing_name, timing_callback in reversed(self.callbacks):
+                end = time.monotonic()
+                duration = end - times[timing_name]
+                times[timing_name] = duration
+            log.debug(
+                "timing end: %s: %s",
+                name,
+                ' '.join(
+                    '%s %.2f' % (timing_name, timing_duration)
+                    for timing_name, timing_duration in times.items()
+                ),
+            )
+            for timing_name, timing_duration in times.items():
+                self.timings.append(
+                    (f'{name}.{timing_name}', start_utc, timing_duration)
+                )
 
 
 timing = Timing()
