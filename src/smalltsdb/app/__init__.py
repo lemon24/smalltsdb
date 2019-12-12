@@ -142,6 +142,7 @@ def make_graph(
             )
             renderers.append(r)
 
+        # TODO: support custom metric labels
         legend_items.append(
             LegendItem(label=short_names[i], renderers=renderers, index=i)
         )
