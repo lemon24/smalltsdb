@@ -67,42 +67,62 @@ def epoch_from_datetime(dt):
 
 class Timing:
     def __init__(self):
-        self.callbacks = [('time', time.monotonic)]
+        self.callbacks = [lambda: [('time', time.monotonic())]]
         self.timings = collections.deque()
 
     @contextmanager
     def __call__(self, name):
-        # TODO: also psutil.Process.io_counters() and .cpu_times() and .memory_info()
-        # TODO: multiple callbacks ^
         log.debug("timing start: %s", name)
         start_utc = TSDB._now()
 
-        times = {}
-        for timing_name, timing_callback in self.callbacks:
-            times[timing_name] = timing_callback()
+        times = collections.OrderedDict()
+        for callback in self.callbacks:
+            times.update(callback())
 
         try:
             yield
         finally:
-            for timing_name, timing_callback in reversed(self.callbacks):
-                end = time.monotonic()
-                duration = end - times[timing_name]
-                times[timing_name] = duration
+            for callback in self.callbacks:
+                for tname, tvalue in callback():
+                    end = tvalue
+                    duration = end - times[tname]
+                    times[tname] = duration
             log.debug(
                 "timing end: %s: %s",
                 name,
                 ' '.join(
-                    '%s %.2f' % (timing_name, timing_duration)
-                    for timing_name, timing_duration in times.items()
+                    '%s %.2f' % (tname, tduration) for tname, tduration in times.items()
                 ),
             )
-            for timing_name, timing_duration in times.items():
-                self.timings.append(
-                    (f'{name}.{timing_name}', start_utc, timing_duration)
-                )
+            for tname, tduration in times.items():
+                self.timings.append((f'{name}.{tname}', start_utc, tduration))
 
 
 timing = Timing()
+
+
+try:
+    import psutil
+except ImportError:
+    psutil = None
+
+
+def get_psutil_timings():
+    p = psutil.Process()
+    with p.oneshot():
+        cpu_times = p.cpu_times()
+        for name in ['user', 'system']:
+            yield name, getattr(cpu_times, name)
+        try:
+            io_counters = p.io_counters()
+            for name in ['read_count', 'write_count', 'read_bytes', 'write_bytes']:
+                yield name, getattr(io_counters, name)
+        except AttributeError:
+            pass
+
+
+if psutil:
+    timing.callbacks.append(get_psutil_timings)
 
 
 class BaseTSDB:
