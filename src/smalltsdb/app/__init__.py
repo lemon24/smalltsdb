@@ -9,6 +9,8 @@ import iso8601
 from bokeh.embed import components
 from bokeh.models import BoxZoomTool
 from bokeh.models import ColumnDataSource
+from bokeh.models import Legend
+from bokeh.models import LegendItem
 from bokeh.palettes import Category10_10 as palette
 from bokeh.plotting import figure
 from bokeh.resources import CDN
@@ -92,7 +94,9 @@ def make_graph(
 
     colors = itertools.cycle(palette)
 
-    for (name, period, stat), color in zip(metrics, colors):
+    legend_items = []
+
+    for i, ((name, period, stat), color) in enumerate(zip(metrics, colors)):
         metric = tsdb.get_metric(name, period, stat, interval)
         lists = list(zip(*metric))
         if not lists:
@@ -103,31 +107,30 @@ def make_graph(
         lists[0] = [ts * 1000 for ts in lists[0]]
         source = {'timestamp': lists[0], 'values': lists[1]}
 
-        plot.line(
-            x='timestamp',
-            y='values',
-            source=source,
-            # TODO: better auto-guessing of names
-            legend=name,
-            line_width=1.2,
-            line_color=color,
+        renderers = []
+
+        r = plot.line(
+            x='timestamp', y='values', source=source, line_width=1.2, line_color=color
         )
+        renderers.append(r)
 
         if points:
             # TODO: deduplicate the arguments
-            plot.circle(
+            r = plot.circle(
                 x='timestamp',
                 y='values',
                 source=source,
-                # TODO: better auto-guessing of names
-                legend=name,
                 line_width=1.2,
                 line_color=color,
+                fill_color=color,
             )
+            renderers.append(r)
 
-    # hacky, from
+        # TODO: better auto-guessing of names
+        legend_items.append(LegendItem(label=name, renderers=renderers, index=i))
+
     # https://docs.bokeh.org/en/latest/docs/user_guide/styling.html#outside-the-plot-area
-    plot.add_layout(plot.legend[0], 'right')
+    plot.add_layout(Legend(items=legend_items), 'right')
 
     # TODO: show/hide legend
 
