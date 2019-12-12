@@ -69,6 +69,19 @@ def close_db(error):
         g.db.close()
 
 
+def make_short_names(tuples):
+    tlen = len(tuples[0])
+
+    indexes = []
+    for i in range(tlen):
+        if len(set(t[i] for t in tuples)) != 1:
+            indexes.append(i)
+    if not indexes:
+        indexes.append(0)
+
+    return [' '.join(t[i] for i in indexes) for t in tuples]
+
+
 def make_graph(
     tsdb, metrics, interval, width=600, height=200, title=None, label=None, points=False
 ):
@@ -93,6 +106,9 @@ def make_graph(
         plot.yaxis.axis_label = label
 
     colors = itertools.cycle(palette)
+
+    # TODO: when metrics become namedtuples, be explicit about what attributes we're using
+    short_names = make_short_names(metrics)
 
     legend_items = []
 
@@ -126,8 +142,9 @@ def make_graph(
             )
             renderers.append(r)
 
-        # TODO: better auto-guessing of names
-        legend_items.append(LegendItem(label=name, renderers=renderers, index=i))
+        legend_items.append(
+            LegendItem(label=short_names[i], renderers=renderers, index=i)
+        )
 
     # https://docs.bokeh.org/en/latest/docs/user_guide/styling.html#outside-the-plot-area
     plot.add_layout(Legend(items=legend_items), 'right')
