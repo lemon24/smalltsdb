@@ -22,6 +22,8 @@ from flask import render_template
 from flask import request
 from jinja2 import StrictUndefined
 
+from .flat import flatten
+from .flat import unflatten
 from smalltsdb.tsdb import PERIODS
 from smalltsdb.tsdb import STATS
 from smalltsdb.tsdb import TSDB
@@ -31,6 +33,8 @@ blueprint = Blueprint('smalltsdb', __name__)
 blueprint.add_app_template_global(CDN.render(), 'resources')
 blueprint.add_app_template_global(STATS, 'STATS')
 blueprint.add_app_template_global(PERIODS, 'PERIODS')
+
+blueprint.app_template_filter('flatten')(flatten)
 
 
 def get_db():
@@ -144,10 +148,10 @@ def parse_datetime(value):
 @blueprint.route('/graph')
 def graph():
 
-    # TODO: allow passing in more than one metric
-    metric = request.args['metric']
-    period = request.args['period']
-    stat = request.args['stat']
+    # TODO: check schema with voluptuous
+    args = unflatten(request.args)
+    metrics_dict = [m for m in args['metrics'] if m['name'].strip()]
+    metrics_tuples = [(m['name'], m['period'], m['stat']) for m in metrics_dict]
 
     default_end = datetime.now(timezone.utc).replace(second=0, microsecond=0)
     default_start = default_end - timedelta(hours=1)
@@ -168,12 +172,7 @@ def graph():
     # TODO: add lower/upper
 
     plot = make_graph(
-        get_db(),
-        [(metric, period, stat)],
-        (start, end),
-        title=title,
-        label=label,
-        points=points,
+        get_db(), metrics_tuples, (start, end), title=title, label=label, points=points
     )
 
     script, div = components(plot)
@@ -185,9 +184,7 @@ def graph():
         # TODO: start/end should be emppty if the originals were
         start=start,
         end=end,
-        metric=metric,
-        period=period,
-        stat=stat,
+        metrics=metrics_dict,
         points=points,
     )
 

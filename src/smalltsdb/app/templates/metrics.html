@@ -2,9 +2,12 @@
 
 {% block body %}
 <ul>
-{% for metric in metrics %}
+{% for name in metrics %}
 <li>
-<a href="{{ url_for('.graph', metric=metric, stat='avg', period='oneminute', points='1') }}">{{ metric }}</a>
+
+{# TODO: find a better way of filling in the defaults #}
+<a href="{{ url_for('.graph', points='1', **( {'metrics': [dict(name=name, stat='avg', period='oneminute')]} | flatten )) }}">{{ name }}</a>
+
 {% endfor %}
 </ul>
 {% endblock %}

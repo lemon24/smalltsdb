@@ -19,27 +19,35 @@
 {% for div in divs %}
 {{ div | safe }}
 
-{# FIXME: this will break if we have multiple divs #}
-<input type="text" name="metric" id="metric" placeholder="metric.path" value="{{ metric }}" required>
 
-<!-- <label for="period">period</label> -->
-<select name="period" id="period">
+{# TODO: loop body should be a macro #}
+{# TODO: find a better way of filling in the defaults #}
+
+{% for metric in metrics + [dict(name='', stat='avg', period='oneminute')] %}
+
+<input type="text" name="metrics.{{ loop.index0 }}.name" id="metrics.{{ loop.index0 }}.name" placeholder="metric.path" value="{{ metric.name }}">
+
+<!-- <label for="metrics.{{ loop.index0 }}.period">period</label> -->
+<select name="metrics.{{ loop.index0 }}.period" id="metrics.{{ loop.index0 }}.period">
 {% for iperiod in PERIODS %}
-<option value="{{ iperiod }}" {% if iperiod == period %}selected{% endif %}>{{ iperiod }}</option>
+<option value="{{ iperiod }}" {% if iperiod == metric.period %}selected{% endif %}>{{ iperiod }}</option>
 {% endfor %}
 </select>
 
-<!-- <label for="stat">stat</label> -->
-<select name="stat" id="stat">
+<!-- <label for="metrics.{{ loop.index0 }}.stat">stat</label> -->
+<select name="metrics.{{ loop.index0 }}.stat" id="metrics.{{ loop.index0 }}.stat">
 {% for istat in STATS %}
-<option value="{{ istat }}" {% if istat == stat %}selected{% endif %}>{{ istat }}</option>
+<option value="{{ istat }}" {% if istat == metric.stat %}selected{% endif %}>{{ istat }}</option>
 {% endfor %}
 </select>
+
+<br>
+
+{% endfor %}
 
 <input type="checkbox" name="points" id="points" value="true" {% if points %}checked{% endif %}=>
 <label for="points">points</label>
 
-<br>
 <input type="submit" value="submit">
 
 
