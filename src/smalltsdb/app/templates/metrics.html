@@ -1,12 +1,29 @@
 {% extends "layout.html" %}
 
 {% block body %}
+
+<form method="get" action="">
+
+<label for="start">start</label>
+<input type="text" id="start" name="start" value="{{ start or '' }}" />
+<label for="end">end</label>
+<input type="text" id="end" name="end" value="{{ end or '' }}" />
+<input type="submit" value="submit">
+
+</form>
+
+
 <ul>
 {% for name in metrics %}
 <li>
 
 {# TODO: find a better way of filling in the defaults #}
-<a href="{{ url_for('.graph', points='1', **( {'metrics': [dict(name=name, stat='avg', period='oneminute')]} | flatten )) }}">{{ name }}</a>
+{% set kwargs = {'metrics': [dict(name=name, stat='avg', period='oneminute')]} | flatten %}
+{% if start and end %}
+{% set _ = kwargs.update(dict(start=start, end=end)) %}
+{% endif %}
+
+<a href="{{ url_for('.graph', points='1', **kwargs) }}">{{ name }}</a>
 
 {% endfor %}
 </ul>

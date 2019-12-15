@@ -215,7 +215,16 @@ def metrics():
     metrics = get_db().list_metrics()
     # other default, maybe?
 
-    return render_template('metrics.html', metrics=metrics, title='metrics')
+    start = None
+    if 'start' in request.args:
+        start = parse_datetime(request.args['start']).replace(tzinfo=None)
+    end = None
+    if 'end' in request.args:
+        end = parse_datetime(request.args['end']).replace(tzinfo=None)
+
+    return render_template(
+        'metrics.html', start=start, end=end, metrics=metrics, title='metrics'
+    )
 
 
 def create_app(db_path):
