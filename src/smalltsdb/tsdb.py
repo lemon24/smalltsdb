@@ -357,6 +357,28 @@ class TablesTSDB(BaseTSDB):
             self._sync()
 
         if self.self_metric_prefix:
+            # TODO: the target database for debug metrics should be configurable
+            # TODO: sync metric emitting should be off by default
+            #
+            # at the moment, with 1 sync/minute, this emits
+            #
+            # metrics = (
+            #   2           # sync.all and sync.delete_incoming_query
+            #   + 6 * (     # len(PERIODS)
+            #       2       # sync.$PERIOD.all and sync.$PERIOD.finals_query
+            #       + metrics)  # 1 sync.$PERIOD.sync_query per metric
+            #     )
+            #  ) * 7        # len(values per timing invocation)
+            #
+            # metrics = (2 + 6 * (2 + metrics)) * 7
+            # metrics = 14 + 84 + 42 * metrics
+            # 1 = 98 * metrics + 42 * metrics**2
+            # 42 * metrics^2 + 98 * metrics - 1 = 0
+            #
+            # metrics = (-98 +- sqrt(98**2 - 4*42*(-1))) / (2 * 42)
+            #   = (-98 +- sqrt(9722)) / 84
+            #   = ... TBD
+            #
             try:
                 self.insert(
                     (f'{self.self_metric_prefix}.{t[0]}',) + t[1:]
@@ -397,7 +419,7 @@ class TablesTSDB(BaseTSDB):
                         """
                     )
 
-                    # exhaust the cursor so we don't get any weird "database is locked" errors
+                    # exhaust the cursor so we don't get any weird "database is locked" errors (?)
                     # https://github.com/lemon24/smalltsdb/issues/2#issuecomment-549119926
                     # TODO: this can fill up the memory if there are a lot of metrics, either paginate it or shove it into a temp table
                     last_finals = list(last_finals)
