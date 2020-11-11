@@ -318,6 +318,11 @@ def intervals(period, tail, now, last_final):
 
 
 class TablesTSDB(BaseTSDB):
+    
+    # Turns out using attached databases to achieve table-level locking is a known thing:
+    # http://sqlite.1065341.n5.nabble.com/Locking-td5121.html#a5122
+    # https://www.sqlite.org/version3.html ("Improved concurrency")
+    
     def __init__(
         self, path, *, with_incoming=True, with_aggregate=True, self_metric_prefix=None
     ):
