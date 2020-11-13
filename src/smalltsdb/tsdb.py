@@ -301,8 +301,12 @@ class TablesTSDB(BaseTSDB):
     def sync(self):
         assert self._with_aggregate and self._with_incoming
 
+        now = self._now()
+
         with self.timer('sync.all') as timings:
-            self._sync()
+            for period, seconds in self._periods.items():
+                self._sync_period(now, period)
+            self._delete_incoming(now)
 
         if self.emit_metrics:
             # TODO: the target database for debug metrics should be configurable
@@ -328,7 +332,7 @@ class TablesTSDB(BaseTSDB):
             #
             self.insert(timings)
 
-    def _sync(self):
+    def _sync_period(self, now, period):
         # TODO: improve performance by not using an aggregate function at all;
         # pull the whole dataset (sorted) into memory, instead
 
@@ -338,72 +342,71 @@ class TablesTSDB(BaseTSDB):
         # TODO: run pragma optimize at the end
         # TODO: maybe vacuum at the end
         # TODO: cap the time the queries run via interrupt()
+        name = period
+        seconds = self._periods[period]
 
-        now = self._now()
+        with self.db as db, self.timer(f'sync.{name}.all'):
+            with self.timer(f'sync.{name}.finals_query'):
 
-        for name, seconds in self._periods.items():
+                last_finals = db.execute(
+                    f"""
+                    with
+                    paths(path) as (
+                        select distinct path from incoming
+                    )
+                    select paths.path, max({name}.timestamp)
+                    from paths left join {name} on paths.path = {name}.path
+                    group by paths.path;
+                    """
+                )
 
-            with self.db as db, self.timer(f'sync.{name}.all'):
-                with self.timer(f'sync.{name}.finals_query'):
+                # exhaust the cursor so we don't get any weird "database is locked" errors (?)
+                # https://github.com/lemon24/smalltsdb/issues/2#issuecomment-549119926
+                # TODO: this can fill up the memory if there are a lot of metrics, either paginate it or shove it into a temp table
+                last_finals = list(last_finals)
 
-                    last_finals = db.execute(
+            for path, last_final in last_finals:
+                (final_start, final_end), _ = intervals(
+                    seconds, self._tail, now, last_final
+                )
+
+                log.debug(
+                    "sync path: %s %s for [%s, %s)",
+                    name,
+                    path,
+                    datetime.datetime.utcfromtimestamp(final_start),
+                    datetime.datetime.utcfromtimestamp(final_end),
+                )
+                with self.timer(f'sync.{name}.sync_query'):
+                    # TODO: set zeroes on the things without incoming values to mark them as final
+                    # TODO: maybe log the number of datapoints synced
+                    # TODO: sort the datapoints before group by (it may speed quantile() up); do this after gathering sync metrics
+
+                    rows = db.execute(
                         f"""
-                        with
-                        paths(path) as (
-                            select distinct path from incoming
+                        insert or replace into {name} (
+                            path, timestamp, n, min, max, avg, sum, p50, p90, p99
                         )
-                        select paths.path, max({name}.timestamp)
-                        from paths left join {name} on paths.path = {name}.path
-                        group by paths.path;
-                        """
+                        select
+                            path,
+                            cast(timestamp as integer) / {seconds} * {seconds} as agg_ts,
+                            count(value),
+                            min(value),
+                            max(value),
+                            avg(value),
+                            sum(value),
+                            quantile(value, .5),
+                            quantile(value, .9),
+                            quantile(value, .99)
+                        from incoming
+                        where path = :path
+                            and timestamp between :start and :end
+                        group by path, agg_ts
+                        """,
+                        {'path': path, 'start': final_start, 'end': final_end},
                     )
 
-                    # exhaust the cursor so we don't get any weird "database is locked" errors (?)
-                    # https://github.com/lemon24/smalltsdb/issues/2#issuecomment-549119926
-                    # TODO: this can fill up the memory if there are a lot of metrics, either paginate it or shove it into a temp table
-                    last_finals = list(last_finals)
-
-                for path, last_final in last_finals:
-                    (final_start, final_end), _ = intervals(
-                        seconds, self._tail, now, last_final
-                    )
-
-                    log.debug(
-                        "sync path: %s %s for [%s, %s)",
-                        name,
-                        path,
-                        datetime.datetime.utcfromtimestamp(final_start),
-                        datetime.datetime.utcfromtimestamp(final_end),
-                    )
-                    with self.timer(f'sync.{name}.sync_query'):
-                        # TODO: set zeroes on the things without incoming values to mark them as final
-                        # TODO: maybe log the number of datapoints synced
-                        # TODO: sort the datapoints before group by (it may speed quantile() up); do this after gathering sync metrics
-
-                        rows = db.execute(
-                            f"""
-                            insert or replace into {name} (
-                                path, timestamp, n, min, max, avg, sum, p50, p90, p99
-                            )
-                            select
-                                path,
-                                cast(timestamp as integer) / {seconds} * {seconds} as agg_ts,
-                                count(value),
-                                min(value),
-                                max(value),
-                                avg(value),
-                                sum(value),
-                                quantile(value, .5),
-                                quantile(value, .9),
-                                quantile(value, .99)
-                            from incoming
-                            where path = :path
-                                and timestamp between :start and :end
-                            group by path, agg_ts
-                            """,
-                            {'path': path, 'start': final_start, 'end': final_end},
-                        )
-
+    def _delete_incoming(self, now):
         delete_end = now - self._tail - max(self._periods.values())
 
         log.debug(
