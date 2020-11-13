@@ -1,4 +1,3 @@
-import collections
 import datetime
 import logging
 import sqlite3
@@ -49,26 +48,36 @@ class QuantileAggregate:
         return numpy.percentile(self.values, self.q * 100)
 
 
-PERIODS = collections.OrderedDict(
-    [
-        ('onesecond', 1),
-        ('tensecond', 10),
-        ('oneminute', 60),
-        ('fiveminute', 300),
-        ('onehour', 3600),
-        ('oneday', 86400),
-    ]
-)
+# TODO: these should be small objects
+
+PERIODS = {
+    'onesecond': 1,
+    'tensecond': 10,
+    'oneminute': 60,
+    'fiveminute': 300,
+    'onehour': 3600,
+    'oneday': 86400,
+}
 
 STATS = 'n min max avg sum p50 p90 p99'.split()
 
 
 class BaseTSDB:
-    def __init__(self, *, with_incoming=True, with_aggregate=True, emit_metrics=False):
+    def __init__(
+        self,
+        *,
+        with_incoming=True,
+        with_aggregate=True,
+        emit_metrics=False,
+        periods=tuple(PERIODS.items()),
+    ):
         self._db = None
         self._with_incoming = with_incoming
         self._with_aggregate = with_aggregate
         self.emit_metrics = emit_metrics
+        # periods are fully-variable
+        self._periods = dict(periods)
+
         self.timer = Timer()
 
     # private
@@ -104,7 +113,7 @@ class BaseTSDB:
         assert self._with_aggregate
 
         # TODO: these should be ValueError
-        assert period in PERIODS
+        assert period in self._periods
         assert stat in STATS
 
         start, end = interval
@@ -131,7 +140,7 @@ class BaseTSDB:
         # TODO: find a better name
         # TODO: what period should we be looking at? all! but make it faster please
 
-        parts = [f"select distinct path from {period}" for period in PERIODS]
+        parts = [f"select distinct path from {period}" for period in self._periods]
         query = "\nunion\n".join(parts) + ";"
 
         # TODO: can exhaust memory, paginate
@@ -200,7 +209,7 @@ class ViewTSDB(BaseTSDB):
 
         db.create_aggregate('quantile', 2, QuantileAggregate)
 
-        for name, seconds in PERIODS.items():
+        for name, seconds in self._periods.items():
             db.execute(
                 f"""
                 -- temporary because it's not gonna work on a connection
@@ -278,7 +287,7 @@ class TablesTSDB(BaseTSDB):
             )
 
         if self._with_aggregate:
-            for name, seconds in PERIODS.items():
+            for name, seconds in self._periods.items():
                 db.execute(sql_create_agg(name))
                 db.execute(
                     f"create index if not exists {name}_index on {name}(path, timestamp);"
@@ -332,7 +341,7 @@ class TablesTSDB(BaseTSDB):
 
         now = self._now()
 
-        for name, seconds in PERIODS.items():
+        for name, seconds in self._periods.items():
 
             with self.db as db, self.timer(f'sync.{name}.all'):
                 with self.timer(f'sync.{name}.finals_query'):
@@ -395,7 +404,7 @@ class TablesTSDB(BaseTSDB):
                             {'path': path, 'start': final_start, 'end': final_end},
                         )
 
-        delete_end = now - self._tail - max(PERIODS.values())
+        delete_end = now - self._tail - max(self._periods.values())
 
         log.debug(
             "delete incoming: older than %s",
@@ -429,7 +438,7 @@ class TwoDatabasesTSDB(TablesTSDB):
             )
 
         if self._with_aggregate:
-            for name, seconds in PERIODS.items():
+            for name, seconds in self._periods.items():
                 db.execute(sql_create_agg(name))
                 db.execute(
                     f"create index if not exists {name}_index on {name}(path, timestamp);"
