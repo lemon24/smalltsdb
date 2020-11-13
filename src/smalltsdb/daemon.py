@@ -153,6 +153,7 @@ def run_daemon(
     started_callback=None,
     received_callback=None,
     self_metric_prefix=None,
+    interval=10,
 ):
 
     socketservers = run_socketservers(
@@ -164,7 +165,7 @@ def run_daemon(
     )
 
     # TODO: remove hardcoded interval
-    timer = run_timer(10, queue.put, TIME)
+    timer = run_timer(interval, queue.put, TIME)
 
     tuples = []
 
@@ -228,7 +229,7 @@ def pretty_print_table(db, table):
     print()
 
 
-def main(db_path):
+def main(db_path, interval):
     q = queue.Queue()
 
     # telling it nicely to stop;
@@ -243,6 +244,12 @@ def main(db_path):
 
     with contextlib.closing(TSDB(db_path, with_aggregate=False)) as tsdb:
         # try:
-        run_daemon(tsdb, ('localhost', 1111), q, self_metric_prefix='smalltsdb.daemon')
+        run_daemon(
+            tsdb,
+            ('localhost', 1111),
+            q,
+            self_metric_prefix='smalltsdb.daemon',
+            interval=interval,
+        )
     # finally:
     # pretty_print_table(tsdb.db, 'tensecond')

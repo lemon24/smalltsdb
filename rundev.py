@@ -26,7 +26,7 @@ def bg_run(*args, **kwargs):
 
 
 bg_run(['flask', 'run', '-h', APP_HOST, '-p', APP_PORT])
-bg_run(['python', '-m', 'smalltsdb.cli', 'daemon'])
+bg_run(['python', '-m', 'smalltsdb.cli', 'daemon', '--interval', '1'])
 
 
 time.sleep(0.5)
@@ -45,9 +45,7 @@ for i in range(3600 // 5):
         text=True,
     )
 
-time.sleep(9.5)
-
-# TODO: find a way to make daemon flush NOW
+time.sleep(0.5)
 
 run(['python', '-m', 'smalltsdb.cli', 'sync'])
 webbrowser.open(f"http://{APP_HOST}:{APP_PORT}")

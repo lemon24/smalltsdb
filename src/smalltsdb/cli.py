@@ -33,10 +33,11 @@ def setup_logging(level):
 
 
 @cli.command()
+@click.option('--interval', type=int, default=10)
 @click.pass_obj
-def daemon(kwargs):
+def daemon(kwargs, interval):
     setup_logging(logging.DEBUG)
-    smalltsdb.daemon.main(kwargs['path'])
+    smalltsdb.daemon.main(kwargs['path'], interval=interval)
 
 
 @cli.command()
