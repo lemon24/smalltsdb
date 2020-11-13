@@ -34,7 +34,7 @@ from smalltsdb.tsdb import TSDB
 blueprint = Blueprint('smalltsdb', __name__)
 blueprint.add_app_template_global(CDN.render(), 'resources')
 blueprint.add_app_template_global(STATS, 'STATS')
-blueprint.add_app_template_global(PERIODS, 'PERIODS')
+blueprint.add_app_template_global([p.name for p in PERIODS], 'PERIODS')
 
 blueprint.app_template_filter('flatten')(flatten)
 

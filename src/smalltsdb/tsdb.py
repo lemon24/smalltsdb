@@ -2,10 +2,12 @@ import datetime
 import logging
 import sqlite3
 import time
+import typing
 
 import numpy
 
 from .timer import Timer
+from .utils import epoch_from_datetime
 from .utils import utcnow
 
 log = logging.getLogger('smalltsdb')
@@ -48,16 +50,19 @@ class QuantileAggregate:
         return numpy.percentile(self.values, self.q * 100)
 
 
-# TODO: these should be small objects
+class Period(typing.NamedTuple):
+    name: str
+    duration: int
 
-PERIODS = {
-    'onesecond': 1,
-    'tensecond': 10,
-    'oneminute': 60,
-    'fiveminute': 300,
-    'onehour': 3600,
-    'oneday': 86400,
-}
+
+PERIODS = [
+    Period('onesecond', 1),
+    Period('tensecond', 10),
+    Period('oneminute', 60),
+    Period('fiveminute', 300),
+    Period('onehour', 3600),
+    Period('oneday', 86400),
+]
 
 STATS = 'n min max avg sum p50 p90 p99'.split()
 
@@ -69,14 +74,13 @@ class BaseTSDB:
         with_incoming=True,
         with_aggregate=True,
         emit_metrics=False,
-        periods=tuple(PERIODS.items()),
+        periods=tuple(PERIODS),
     ):
         self._db = None
         self._with_incoming = with_incoming
         self._with_aggregate = with_aggregate
         self.emit_metrics = emit_metrics
-        # periods are fully-variable
-        self._periods = dict(periods)
+        self._periods = list(periods)
 
         self.timer = Timer()
 
@@ -113,7 +117,7 @@ class BaseTSDB:
         assert self._with_aggregate
 
         # TODO: these should be ValueError
-        assert period in self._periods
+        assert period in {p.name for p in self._periods}
         assert stat in STATS
 
         start, end = interval
@@ -140,7 +144,7 @@ class BaseTSDB:
         # TODO: find a better name
         # TODO: what period should we be looking at? all! but make it faster please
 
-        parts = [f"select distinct path from {period}" for period in self._periods]
+        parts = [f"select distinct path from {period.name}" for period in self._periods]
         query = "\nunion\n".join(parts) + ";"
 
         # TODO: can exhaust memory, paginate
@@ -209,7 +213,7 @@ class ViewTSDB(BaseTSDB):
 
         db.create_aggregate('quantile', 2, QuantileAggregate)
 
-        for name, seconds in self._periods.items():
+        for name, seconds in self._periods:
             db.execute(
                 f"""
                 -- temporary because it's not gonna work on a connection
@@ -287,7 +291,7 @@ class TablesTSDB(BaseTSDB):
             )
 
         if self._with_aggregate:
-            for name, seconds in self._periods.items():
+            for name, seconds in self._periods:
                 db.execute(sql_create_agg(name))
                 db.execute(
                     f"create index if not exists {name}_index on {name}(path, timestamp);"
@@ -304,7 +308,7 @@ class TablesTSDB(BaseTSDB):
         now = self._now()
 
         with self.timer('sync.all') as timings:
-            for period, seconds in self._periods.items():
+            for period in self._periods:
                 self._sync_period(now, period)
             self._delete_incoming(now)
 
@@ -342,8 +346,7 @@ class TablesTSDB(BaseTSDB):
         # TODO: run pragma optimize at the end
         # TODO: maybe vacuum at the end
         # TODO: cap the time the queries run via interrupt()
-        name = period
-        seconds = self._periods[period]
+        name, seconds = period
 
         with self.db as db, self.timer(f'sync.{name}.all'):
             with self.timer(f'sync.{name}.finals_query'):
@@ -407,7 +410,7 @@ class TablesTSDB(BaseTSDB):
                     )
 
     def _delete_incoming(self, now):
-        delete_end = now - self._tail - max(self._periods.values())
+        delete_end = now - self._tail - max(p.duration for p in self._periods)
 
         log.debug(
             "delete incoming: older than %s",
@@ -441,7 +444,8 @@ class TwoDatabasesTSDB(TablesTSDB):
             )
 
         if self._with_aggregate:
-            for name, seconds in self._periods.items():
+            for period in self._periods:
+                name = period.name
                 db.execute(sql_create_agg(name))
                 db.execute(
                     f"create index if not exists {name}_index on {name}(path, timestamp);"
