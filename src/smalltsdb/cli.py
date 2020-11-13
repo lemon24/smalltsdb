@@ -54,8 +54,9 @@ def sync(kwargs, lock_file):
             raise click.ClickException("could not acquire lock: {}".format(lock_file))
 
     try:
-        tsdb = smalltsdb.TSDB(kwargs['path'], self_metric_prefix='smalltsdb')
+        tsdb = smalltsdb.TSDB(kwargs['path'], emit_metrics=True)
         tsdb.timer.add_default_callbacks()
+        tsdb.timer.prefix = 'smalltsdb.'
         tsdb.sync()
     finally:
         # TODO: is this the correct level?

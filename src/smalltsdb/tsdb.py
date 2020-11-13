@@ -261,11 +261,11 @@ class TablesTSDB(BaseTSDB):
     # https://www.sqlite.org/version3.html ("Improved concurrency")
 
     def __init__(
-        self, path, *, with_incoming=True, with_aggregate=True, self_metric_prefix=None
+        self, path, *, with_incoming=True, with_aggregate=True, emit_metrics=False
     ):
         super().__init__(with_incoming, with_aggregate)
         self.path = path
-        self.self_metric_prefix = self_metric_prefix
+        self.emit_metrics = emit_metrics
 
     def _open_db(self):
         db = sqlite3.connect(self.path)
@@ -297,7 +297,7 @@ class TablesTSDB(BaseTSDB):
         with self.timer('sync.all') as timings:
             self._sync()
 
-        if self.self_metric_prefix:
+        if self.emit_metrics:
             # TODO: the target database for debug metrics should be configurable
             #
             # at the moment, with 1 sync/minute, this emits
@@ -319,7 +319,7 @@ class TablesTSDB(BaseTSDB):
             #   = (-98 +- sqrt(9722)) / 84
             #   = ... TBD
             #
-            self.insert((f'{self.self_metric_prefix}.{t[0]}',) + t[1:] for t in timings)
+            self.insert(timings)
 
     def _sync(self):
         # TODO: improve performance by not using an aggregate function at all;
@@ -417,13 +417,13 @@ class TwoDatabasesTSDB(TablesTSDB):
         *,
         with_incoming=True,
         with_aggregate=True,
-        self_metric_prefix=None,
+        emit_metrics=None,
     ):
         super().__init__(
             path,
             with_incoming=with_incoming,
             with_aggregate=with_aggregate,
-            self_metric_prefix=self_metric_prefix,
+            emit_metrics=emit_metrics,
         )
         if incoming_path is None:
             incoming_path = path

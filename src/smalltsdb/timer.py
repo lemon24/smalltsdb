@@ -34,8 +34,9 @@ class Timer:
 
     """
 
-    def __init__(self, callbacks=()):
+    def __init__(self, callbacks=(), prefix=''):
         self.callbacks = list(callbacks)
+        self.prefix = prefix
         self._timings = None
 
     @contextmanager
@@ -43,6 +44,8 @@ class Timer:
         first = self._timings is None
         if first:
             self._timings = []
+
+        name = self.prefix + name
 
         log.debug("timing start: %s", name)
         start_utc = utcnow()
