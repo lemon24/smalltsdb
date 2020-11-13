@@ -66,7 +66,10 @@ def test_integration(tmp_path, TSDB, socket_type, port):
         received_queue.get()
 
     q.put(None)
-    t.join()
+    # Should be t.join(), since the daemon must be one before sync starts.
+    # On macOS, join() takes ~1s for some reason;
+    # as this slows the tests too much, we optimistically "sleep" .1s.
+    t.join(0.1)
 
     tsdb = TSDB(db_path)
     tsdb.sync()
