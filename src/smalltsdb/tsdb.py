@@ -6,7 +6,7 @@ import time
 
 import numpy
 
-from .timing import Timing
+from .timer import Timer
 from .utils import utcnow
 
 log = logging.getLogger('smalltsdb')
@@ -68,7 +68,7 @@ class BaseTSDB:
         self._db = None
         self._with_incoming = with_incoming
         self._with_aggregate = with_aggregate
-        self._timing = Timing()
+        self.timer = Timer()
 
     # private
 
@@ -112,7 +112,7 @@ class BaseTSDB:
         if isinstance(end, datetime.datetime):
             end = epoch_from_datetime(end)
 
-        with self._timing("get_metric"):
+        with self.timer("get_metric"):
             rows = self.db.execute(
                 f"""
                 select timestamp, {stat}
@@ -134,7 +134,7 @@ class BaseTSDB:
         query = "\nunion\n".join(parts) + ";"
 
         # TODO: can exhaust memory, paginate
-        with self._timing("list_metrics"):
+        with self.timer("list_metrics"):
             return [row[0] for row in self.db.execute(query)]
 
 
@@ -294,7 +294,7 @@ class TablesTSDB(BaseTSDB):
     def sync(self):
         assert self._with_aggregate and self._with_incoming
 
-        with self._timing('sync.all') as timings:
+        with self.timer('sync.all') as timings:
             self._sync()
 
         if self.self_metric_prefix:
@@ -338,8 +338,8 @@ class TablesTSDB(BaseTSDB):
 
         for name, seconds in PERIODS.items():
 
-            with self.db as db, self._timing(f'sync.{name}.all'):
-                with self._timing(f'sync.{name}.finals_query'):
+            with self.db as db, self.timer(f'sync.{name}.all'):
+                with self.timer(f'sync.{name}.finals_query'):
 
                     last_finals = db.execute(
                         f"""
@@ -370,7 +370,7 @@ class TablesTSDB(BaseTSDB):
                         datetime.datetime.utcfromtimestamp(final_start),
                         datetime.datetime.utcfromtimestamp(final_end),
                     )
-                    with self._timing(f'sync.{name}.sync_query'):
+                    with self.timer(f'sync.{name}.sync_query'):
                         # TODO: set zeroes on the things without incoming values to mark them as final
                         # TODO: maybe log the number of datapoints synced
                         # TODO: sort the datapoints before group by (it may speed quantile() up); do this after gathering sync metrics
@@ -405,7 +405,7 @@ class TablesTSDB(BaseTSDB):
             "delete incoming: older than %s",
             datetime.datetime.utcfromtimestamp(delete_end),
         )
-        with self.db as db, self._timing('sync.delete_incoming_query'):
+        with self.db as db, self.timer('sync.delete_incoming_query'):
             db.execute("delete from incoming where timestamp < ?;", (delete_end,))
 
 

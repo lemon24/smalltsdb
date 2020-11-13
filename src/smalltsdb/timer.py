@@ -1,4 +1,3 @@
-# TODO: rename to timer?
 import logging
 import time
 from contextlib import contextmanager
@@ -14,7 +13,27 @@ except ImportError:
 log = logging.getLogger('smalltsdb')
 
 
-class Timing:
+class Timer:
+
+    """Measure blocks of code using arbitrary clocks.
+
+    >>> def clock():
+    ...     return [('time', time.monotonic())]
+    ...
+    >>> timer = Timer([clock])
+    >>> with timer('outer') as timings:
+    ...     time.sleep(.1)
+    ...     with timer('inner'):
+    ...         time.sleep(.2)
+    ...
+    >>> for name, start, duration in timings:
+    ...     print(name, round(start, 1), round(duration, 1))
+    ...
+    inner.time 1605280657.7 0.2
+    outer.time 1605280657.6 0.3
+
+    """
+
     def __init__(self, callbacks=()):
         self.callbacks = list(callbacks)
         self._timings = None
@@ -25,26 +44,22 @@ class Timing:
         if first:
             self._timings = []
 
-        def call_callbacks():
-            for callback in self.callbacks:
-                yield from callback()
-
         log.debug("timing start: %s", name)
         start_utc = utcnow()
 
-        starts = dict(call_callbacks())
+        starts = dict(pair for callback in self.callbacks for pair in callback())
         try:
             yield self._timings
         finally:
-            ends = list(call_callbacks())
+            ends = list(
+                pair for callback in reversed(self.callbacks) for pair in callback()
+            )
             times = {tname: end - starts[tname] for tname, end in ends}
 
             log.debug(
                 "timing end: %s: %s",
                 name,
-                ' '.join(
-                    '%s %.2f' % (tname, tduration) for tname, tduration in times.items()
-                ),
+                ' '.join('%s %.2f' % t for t in times.items()),
             )
             for tname, tduration in times.items():
                 self._timings.append((f'{name}.{tname}', start_utc, tduration))
@@ -74,4 +89,4 @@ def get_psutil_timings():
 
 
 def get_time_timings():
-    return [('time', time.monotonic())]
+    return [('time', time.perf_counter())]

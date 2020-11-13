@@ -55,7 +55,7 @@ def sync(kwargs, lock_file):
 
     try:
         tsdb = smalltsdb.TSDB(kwargs['path'], self_metric_prefix='smalltsdb')
-        tsdb._timing.add_default_callbacks()
+        tsdb.timer.add_default_callbacks()
         tsdb.sync()
     finally:
         # TODO: is this the correct level?
