@@ -3,9 +3,11 @@ import datetime
 import logging
 import sqlite3
 import time
-from contextlib import contextmanager
 
 import numpy
+
+from .timing import Timing
+from .utils import utcnow
 
 log = logging.getLogger('smalltsdb')
 
@@ -61,68 +63,8 @@ PERIODS = collections.OrderedDict(
 STATS = 'n min max avg sum p50 p90 p99'.split()
 
 
-def epoch_from_datetime(dt):
-    return (dt - datetime.datetime(1970, 1, 1)) / datetime.timedelta(seconds=1)
-
-
-class Timing:
-    def __init__(self):
-        self.callbacks = [lambda: [('time', time.monotonic())]]
-        self.timings = collections.deque()
-
-    @contextmanager
-    def __call__(self, name):
-        log.debug("timing start: %s", name)
-        start_utc = TSDB._now()
-
-        times = collections.OrderedDict()
-        for callback in self.callbacks:
-            times.update(callback())
-
-        try:
-            yield
-        finally:
-            for callback in self.callbacks:
-                for tname, tvalue in callback():
-                    end = tvalue
-                    duration = end - times[tname]
-                    times[tname] = duration
-            log.debug(
-                "timing end: %s: %s",
-                name,
-                ' '.join(
-                    '%s %.2f' % (tname, tduration) for tname, tduration in times.items()
-                ),
-            )
-            for tname, tduration in times.items():
-                self.timings.append((f'{name}.{tname}', start_utc, tduration))
-
-
 timing = Timing()
-
-
-try:
-    import psutil
-except ImportError:
-    psutil = None
-
-
-def get_psutil_timings():
-    p = psutil.Process()
-    with p.oneshot():
-        cpu_times = p.cpu_times()
-        for name in ['user', 'system']:
-            yield name, getattr(cpu_times, name)
-        try:
-            io_counters = p.io_counters()
-            for name in ['read_count', 'write_count', 'read_bytes', 'write_bytes']:
-                yield name, getattr(io_counters, name)
-        except AttributeError:
-            pass
-
-
-if psutil:
-    timing.callbacks.append(get_psutil_timings)
+timing.enable()
 
 
 class BaseTSDB:
@@ -136,9 +78,7 @@ class BaseTSDB:
     def _open_db(self):
         raise NotImplementedError
 
-    @staticmethod
-    def _now():
-        return epoch_from_datetime(datetime.datetime.utcnow())
+    _now = staticmethod(utcnow)
 
     # public - lifecycle
 
@@ -318,11 +258,11 @@ def intervals(period, tail, now, last_final):
 
 
 class TablesTSDB(BaseTSDB):
-    
+
     # Turns out using attached databases to achieve table-level locking is a known thing:
     # http://sqlite.1065341.n5.nabble.com/Locking-td5121.html#a5122
     # https://www.sqlite.org/version3.html ("Improved concurrency")
-    
+
     def __init__(
         self, path, *, with_incoming=True, with_aggregate=True, self_metric_prefix=None
     ):
