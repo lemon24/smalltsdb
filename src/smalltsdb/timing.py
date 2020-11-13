@@ -1,16 +1,15 @@
 # TODO: rename to timer?
-import collections
-import contextlib
 import logging
 import time
+from contextlib import contextmanager
 
 from .utils import utcnow
-
 
 try:
     import psutil
 except ImportError:
     psutil = None
+
 
 log = logging.getLogger('smalltsdb')
 
@@ -18,25 +17,28 @@ log = logging.getLogger('smalltsdb')
 class Timing:
     def __init__(self, callbacks=()):
         self.callbacks = list(callbacks)
-        self.timings = collections.deque()
+        self._timings = None
 
-    @contextlib.contextmanager
+    @contextmanager
     def __call__(self, name):
+        first = self._timings is None
+        if first:
+            self._timings = []
+
+        def call_callbacks():
+            for callback in self.callbacks:
+                yield from callback()
+
         log.debug("timing start: %s", name)
         start_utc = utcnow()
 
-        times = collections.OrderedDict()
-        for callback in self.callbacks:
-            times.update(callback())
-
+        starts = dict(call_callbacks())
         try:
-            yield
+            yield self._timings
         finally:
-            for callback in self.callbacks:
-                for tname, tvalue in callback():
-                    end = tvalue
-                    duration = end - times[tname]
-                    times[tname] = duration
+            ends = list(call_callbacks())
+            times = {tname: end - starts[tname] for tname, end in ends}
+
             log.debug(
                 "timing end: %s: %s",
                 name,
@@ -45,13 +47,16 @@ class Timing:
                 ),
             )
             for tname, tduration in times.items():
-                self.timings.append((f'{name}.{tname}', start_utc, tduration))
+                self._timings.append((f'{name}.{tname}', start_utc, tduration))
 
-    def enable(self):
-        if get_time_timings not in self.callbacks:
-            self.callbacks.append(get_time_timings)
+            if first:
+                self._timings = None
+
+    def add_default_callbacks(self):
         if psutil and get_psutil_timings not in self.callbacks:
             self.callbacks.append(get_psutil_timings)
+        if get_time_timings not in self.callbacks:
+            self.callbacks.append(get_time_timings)
 
 
 def get_psutil_timings():

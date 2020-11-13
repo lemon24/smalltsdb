@@ -294,8 +294,7 @@ class TablesTSDB(BaseTSDB):
     def sync(self):
         assert self._with_aggregate and self._with_incoming
 
-        # TODO: there must be a better way of collecting timings
-        with self._timing('sync.all'):
+        with self._timing('sync.all') as timings:
             self._sync()
 
         if self.self_metric_prefix:
@@ -320,13 +319,7 @@ class TablesTSDB(BaseTSDB):
             #   = (-98 +- sqrt(9722)) / 84
             #   = ... TBD
             #
-            try:
-                self.insert(
-                    (f'{self.self_metric_prefix}.{t[0]}',) + t[1:]
-                    for t in self._timing.timings
-                )
-            finally:
-                self._timing.timings.clear()
+            self.insert((f'{self.self_metric_prefix}.{t[0]}',) + t[1:] for t in timings)
 
     def _sync(self):
         # TODO: improve performance by not using an aggregate function at all;
