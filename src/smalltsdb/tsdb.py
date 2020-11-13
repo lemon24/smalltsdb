@@ -64,10 +64,11 @@ STATS = 'n min max avg sum p50 p90 p99'.split()
 
 
 class BaseTSDB:
-    def __init__(self, with_incoming, with_aggregate):
+    def __init__(self, *, with_incoming=True, with_aggregate=True, emit_metrics=False):
         self._db = None
         self._with_incoming = with_incoming
         self._with_aggregate = with_aggregate
+        self.emit_metrics = emit_metrics
         self.timer = Timer()
 
     # private
@@ -185,8 +186,8 @@ def sql_select_agg(seconds):
 
 
 class ViewTSDB(BaseTSDB):
-    def __init__(self, path, *, with_incoming=True, with_aggregate=True):
-        super().__init__(with_incoming, with_aggregate)
+    def __init__(self, path, **kwargs):
+        super().__init__(**kwargs)
         self.path = path
 
     def _open_db(self):
@@ -260,12 +261,9 @@ class TablesTSDB(BaseTSDB):
     # http://sqlite.1065341.n5.nabble.com/Locking-td5121.html#a5122
     # https://www.sqlite.org/version3.html ("Improved concurrency")
 
-    def __init__(
-        self, path, *, with_incoming=True, with_aggregate=True, emit_metrics=False
-    ):
-        super().__init__(with_incoming, with_aggregate)
+    def __init__(self, path, **kwargs):
+        super().__init__(**kwargs)
         self.path = path
-        self.emit_metrics = emit_metrics
 
     def _open_db(self):
         db = sqlite3.connect(self.path)
@@ -333,8 +331,6 @@ class TablesTSDB(BaseTSDB):
         # TODO: cap the time the queries run via interrupt()
 
         now = self._now()
-
-        timing_results = []
 
         for name, seconds in PERIODS.items():
 
@@ -410,21 +406,8 @@ class TablesTSDB(BaseTSDB):
 
 
 class TwoDatabasesTSDB(TablesTSDB):
-    def __init__(
-        self,
-        path,
-        incoming_path=None,
-        *,
-        with_incoming=True,
-        with_aggregate=True,
-        emit_metrics=None,
-    ):
-        super().__init__(
-            path,
-            with_incoming=with_incoming,
-            with_aggregate=with_aggregate,
-            emit_metrics=emit_metrics,
-        )
+    def __init__(self, path, incoming_path=None, **kwargs):
+        super().__init__(path, **kwargs)
         if incoming_path is None:
             incoming_path = path
             if path not in (':memory:', ''):
