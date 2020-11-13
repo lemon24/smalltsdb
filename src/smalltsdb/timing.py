@@ -1,3 +1,4 @@
+# TODO: rename to timer?
 import collections
 import contextlib
 import logging

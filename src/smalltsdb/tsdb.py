@@ -63,15 +63,12 @@ PERIODS = collections.OrderedDict(
 STATS = 'n min max avg sum p50 p90 p99'.split()
 
 
-timing = Timing()
-timing.enable()
-
-
 class BaseTSDB:
     def __init__(self, with_incoming, with_aggregate):
         self._db = None
         self._with_incoming = with_incoming
         self._with_aggregate = with_aggregate
+        self._timing = Timing()
 
     # private
 
@@ -115,7 +112,7 @@ class BaseTSDB:
         if isinstance(end, datetime.datetime):
             end = epoch_from_datetime(end)
 
-        with timing("get_metric"):
+        with self._timing("get_metric"):
             rows = self.db.execute(
                 f"""
                 select timestamp, {stat}
@@ -137,7 +134,7 @@ class BaseTSDB:
         query = "\nunion\n".join(parts) + ";"
 
         # TODO: can exhaust memory, paginate
-        with timing("list_metrics"):
+        with self._timing("list_metrics"):
             return [row[0] for row in self.db.execute(query)]
 
 
@@ -298,12 +295,11 @@ class TablesTSDB(BaseTSDB):
         assert self._with_aggregate and self._with_incoming
 
         # TODO: there must be a better way of collecting timings
-        with timing('sync.all'):
+        with self._timing('sync.all'):
             self._sync()
 
         if self.self_metric_prefix:
             # TODO: the target database for debug metrics should be configurable
-            # TODO: sync metric emitting should be off by default
             #
             # at the moment, with 1 sync/minute, this emits
             #
@@ -327,10 +323,10 @@ class TablesTSDB(BaseTSDB):
             try:
                 self.insert(
                     (f'{self.self_metric_prefix}.{t[0]}',) + t[1:]
-                    for t in timing.timings
+                    for t in self._timing.timings
                 )
             finally:
-                timing.timings.clear()
+                self._timing.timings.clear()
 
     def _sync(self):
         # TODO: improve performance by not using an aggregate function at all;
@@ -349,8 +345,8 @@ class TablesTSDB(BaseTSDB):
 
         for name, seconds in PERIODS.items():
 
-            with self.db as db, timing(f'sync.{name}.all'):
-                with timing(f'sync.{name}.finals_query'):
+            with self.db as db, self._timing(f'sync.{name}.all'):
+                with self._timing(f'sync.{name}.finals_query'):
 
                     last_finals = db.execute(
                         f"""
@@ -381,7 +377,7 @@ class TablesTSDB(BaseTSDB):
                         datetime.datetime.utcfromtimestamp(final_start),
                         datetime.datetime.utcfromtimestamp(final_end),
                     )
-                    with timing(f'sync.{name}.sync_query'):
+                    with self._timing(f'sync.{name}.sync_query'):
                         # TODO: set zeroes on the things without incoming values to mark them as final
                         # TODO: maybe log the number of datapoints synced
                         # TODO: sort the datapoints before group by (it may speed quantile() up); do this after gathering sync metrics
@@ -416,7 +412,7 @@ class TablesTSDB(BaseTSDB):
             "delete incoming: older than %s",
             datetime.datetime.utcfromtimestamp(delete_end),
         )
-        with self.db as db, timing('sync.delete_incoming_query'):
+        with self.db as db, self._timing('sync.delete_incoming_query'):
             db.execute("delete from incoming where timestamp < ?;", (delete_end,))
 
 
