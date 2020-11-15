@@ -57,7 +57,7 @@ def sync(kwargs, lock_file):
     try:
         tsdb = smalltsdb.TSDB(kwargs['path'], emit_metrics=True)
         tsdb.timer.add_default_callbacks()
-        tsdb.timer.prefix = 'smalltsdb.'
+        tsdb.timer.prefixes.append('smalltsdb')
         tsdb.sync()
     finally:
         # TODO: is this the correct level?

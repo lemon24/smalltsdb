@@ -307,7 +307,7 @@ class TablesTSDB(BaseTSDB):
 
         now = self._now()
 
-        with self.timer('sync.all') as timings:
+        with self.timer('sync', 'all') as timings:
             for period in self._periods:
                 self._sync_period(now, period)
             self._delete_incoming(now)
@@ -348,8 +348,8 @@ class TablesTSDB(BaseTSDB):
         # TODO: cap the time the queries run via interrupt()
         name, seconds = period
 
-        with self.db as db, self.timer(f'sync.{name}.all'):
-            with self.timer(f'sync.{name}.finals_query'):
+        with self.db as db, self.timer(name, 'all'):
+            with self.timer('finals_query'):
 
                 last_finals = db.execute(
                     f"""
@@ -380,7 +380,7 @@ class TablesTSDB(BaseTSDB):
                     datetime.datetime.utcfromtimestamp(final_start),
                     datetime.datetime.utcfromtimestamp(final_end),
                 )
-                with self.timer(f'sync.{name}.sync_query'):
+                with self.timer('sync_query'):
                     # TODO: set zeroes on the things without incoming values to mark them as final
                     # TODO: maybe log the number of datapoints synced
                     # TODO: sort the datapoints before group by (it may speed quantile() up); do this after gathering sync metrics
@@ -416,7 +416,7 @@ class TablesTSDB(BaseTSDB):
             "delete incoming: older than %s",
             datetime.datetime.utcfromtimestamp(delete_end),
         )
-        with self.db as db, self.timer('sync.delete_incoming_query'):
+        with self.db as db, self.timer('delete_incoming_query'):
             db.execute("delete from incoming where timestamp < ?;", (delete_end,))
 
 

@@ -21,6 +21,7 @@ class Timer:
     ...     return [('time', time.monotonic())]
     ...
     >>> timer = Timer([clock])
+    >>>
     >>> with timer('outer') as timings:
     ...     time.sleep(.1)
     ...     with timer('inner'):
@@ -29,23 +30,43 @@ class Timer:
     >>> for name, start, duration in timings:
     ...     print(name, round(start, 1), round(duration, 1))
     ...
-    inner.time 1605280657.7 0.2
-    outer.time 1605280657.6 0.3
+    inner.time 1605456798.8 0.2
+    outer.time 1605456798.7 0.3
+    >>>
+    >>> with timer('prefix', 'all') as timings:
+    ...     with timer('one'):
+    ...         time.sleep(.1)
+    ...     with timer('two'):
+    ...         time.sleep(.2)
+    ...
+    >>> for name, start, duration in timings:
+    ...     print(name, round(start, 1), round(duration, 1))
+    ...
+    prefix.one.time 1605456799.0 0.1
+    prefix.two.time 1605456799.1 0.2
+    prefix.all.time 1605456799.0 0.3
 
     """
 
-    def __init__(self, callbacks=(), prefix=''):
+    def __init__(self, callbacks=(), prefix=None):
         self.callbacks = list(callbacks)
-        self.prefix = prefix
+        self.prefixes = [prefix] if prefix else []
+        self.separator = '.'
         self._timings = None
 
     @contextmanager
-    def __call__(self, name):
+    def __call__(self, name_or_prefix, maybe_name=None):
+        if maybe_name is None:
+            name = name_or_prefix
+        else:
+            name = maybe_name
+            self.prefixes.append(name_or_prefix)
+
         first = self._timings is None
         if first:
             self._timings = []
 
-        name = self.prefix + name
+        name = self.separator.join(self.prefixes + [name])
 
         log.debug("timing start: %s", name)
         start_utc = utcnow()
@@ -65,10 +86,15 @@ class Timer:
                 ' '.join('%s %.2f' % t for t in times.items()),
             )
             for tname, tduration in times.items():
-                self._timings.append((f'{name}.{tname}', start_utc, tduration))
+                self._timings.append(
+                    (f'{name}{self.separator}{tname}', start_utc, tduration)
+                )
 
             if first:
                 self._timings = None
+
+            if maybe_name is not None:
+                self.prefixes.pop()
 
     def add_default_callbacks(self):
         if psutil and get_psutil_timings not in self.callbacks:
